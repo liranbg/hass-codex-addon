@@ -1,18 +1,17 @@
+---
 name: OpenAI Codex (Terminal)
 slug: oai_codex_terminal
 description: "OpenAI Codex CLI interface"
-version: "0.1.0"
 url: "https://github.com/liranbg/hass-codex-addon"
+version: dev
+startup: services
+init: false
 arch:
   - amd64
   - aarch64
 
-init: false
-startup: services
-
 # Web UI access URL
 webui: http://[HOST]:[PORT:8000]/
-
 
 # UI
 ingress: true
@@ -45,6 +44,6 @@ schema:
 
 # Allow the add-on to access the Home Assistant API
 hassio_api: true
-hassio_role: manager
 homeassistant_api: true
+hassio_role: manager
 auth_api: true
