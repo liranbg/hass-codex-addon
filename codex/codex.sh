@@ -3,6 +3,12 @@ set -euo pipefail
 
 cd /config
 
+# Ensure AGENTS.md exists in working directory
+if [[ ! -f "AGENTS.md" ]]; then
+  echo "Creating AGENTS.md from template..."
+  cp /AGENTS.tmpl.md AGENTS.md
+fi
+
 clear
 echo "Initializing OpenAI Codex..."
 

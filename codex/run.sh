@@ -6,13 +6,14 @@ port=8000
 title="OpenAI Codex"
 fontSize=18
 
+bashio::log.info "Starting ttyd terminal for Codex on port ${port} (Ingress enabled)"
+
 # Read configuration from Home Assistant Supervisor
 OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
 CODEX_MODEL="$(bashio::config 'model')"
 
 bashio::log.info "OPENAI_API_KEY: ${OPENAI_API_KEY:+***SET***}"
 bashio::log.info "CODEX_MODEL: ${CODEX_MODEL:-<default>}"
-bashio::log.info "Starting ttyd terminal for Codex on port ${port} (Ingress enabled)"
 
 # TTYD environment variables
 export TTYD_PORT=${port}

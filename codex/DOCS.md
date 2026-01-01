@@ -7,7 +7,7 @@ Add-on format follows Home Assistant's developer docs: [Developing an add-on](ht
 ### Configuration
 
 - **openai_api_key** (required): Your OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-keys).
-- **model** (optional): Override the default model (e.g., `gpt-4o`, `o3`).
+- **model** (optional): Override the default model (e.g., `gpt-5.1-codex-mini`, `gpt-5.2-codex`).
 
 ### Usage
 

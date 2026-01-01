@@ -8,15 +8,19 @@ This document is for **local development**. Each section is designed to be **run
 
 Assumption: commands are run from the **repository root** unless stated otherwise.
 
-## Project model (what’s running where)
+## Project model (what's running where)
 
 - **Add-on container**: built from [`codex/Dockerfile`](codex/Dockerfile)
+  - Installs Node.js, ttyd, git, HA CLI, and `@openai/codex` CLI
 - **Runtime entrypoint in HA**: [`codex/run.sh`](codex/run.sh)
   - Uses `bashio` to read add-on config (available **only** under the HA Supervisor environment)
-  - Starts `ttyd` on **port 8000**
+  - Exports `OPENAI_API_KEY` and `CODEX_MODEL` environment variables
+  - Starts `ttyd` on **port 8000**, which spawns [`codex/codex.sh`](codex/codex.sh)
+- **Codex wrapper script**: [`codex/codex.sh`](codex/codex.sh)
+  - Authenticates with OpenAI using `OPENAI_API_KEY`
+  - Launches `codex --full-auto [-m MODEL]` in an interactive loop
 - **Add-on metadata/options**: [`codex/config.yaml`](codex/config.yaml)
   - Ingress enabled, `ingress_port: 8000`
-
 
 ## Prerequisites
 
@@ -82,19 +86,21 @@ docker rm -f hass-codex-addon-dev
 ### When you need a rebuild
 
 - **Dockerfile changes**: always rebuild the image
-- **`run.sh` changes**:
-  - Standalone test: rebuild (because `run.sh` is `COPY`’d into the image)
+- **`run.sh` or `codex.sh` changes**:
+  - Standalone test: rebuild (because scripts are `COPY`'d into the image), or use `docker cp` for quick iteration
   - HA test: rebuild the add-on (Supervisor rebuild)
 - **`config.yaml` changes**: rebuild/reload add-on metadata in HA (and often rebuild)
 
 ### Fast rebuild + rerun
 
 #### Run once
+
 ```bash
 
 docker build \
   -f codex/Dockerfile \
-  --build-arg BUILD_FROM="ghcr.io/home-assistant/aarch64-base:latest" \
+  --build-arg BUILD_FROM=ghcr.io/home-assistant/aarch64-base:latest \
+  --build-arg BUILD_ARCH=aarch64 \
   -t hass-codex-addon:dev \
   codex/
 
@@ -104,7 +110,6 @@ docker run -d --rm --name hass-codex-addon-dev \
   -v $(pwd)/.local_run:/data \
   -p 8000:8000 \
   hass-codex-addon:dev
-
 ```
 
 #### Run iteratively
@@ -114,10 +119,10 @@ For rapid iteration on shell scripts **without rebuilding** the image:
 ```bash
 # Copy updated scripts into the running container
 docker cp ./codex/codex.sh hass-codex-addon-dev:/codex.sh
-
+docker cp ./codex/run.sh hass-codex-addon-dev:/run.sh
 ```
 
-> **Note**: This only works for script changes. Dockerfile changes (new packages, build steps) always require a full rebuild.
+> **Note**: This only works for script changes. Dockerfile changes (new packages, build steps) always require a full rebuild. For `run.sh` changes to take effect, you need to restart the container.
 
 ---
 
@@ -144,10 +149,10 @@ The `docker run` command mounts this directory to `/data`, making the config ava
 
 ### Configuration options
 
-| Option | Required | Description |
-|--------|----------|-------------|
-| `openai_api_key` | Yes | Your OpenAI API key |
-| `model` | No | Model override (e.g., `o3-mini`). Empty uses Codex default |
+| Option           | Required | Env Variable     | Description                                                           |
+| ---------------- | -------- | ---------------- | --------------------------------------------------------------------- |
+| `openai_api_key` | Yes      | `OPENAI_API_KEY` | Your OpenAI API key                                                   |
+| `model`          | No       | `CODEX_MODEL`    | Model override (e.g., `gpt-5.1-codex-mini`). Empty uses Codex default                 |
 
 ---
 
@@ -184,6 +189,7 @@ docker logs hass-codex-addon-dev
 ```
 
 Common causes:
+
 - Missing `/data/options.json` → create `.local_run/options.json`
 - Invalid JSON in options file → validate with `jq . .local_run/options.json`
 

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Syncs local add-ons to the supervisor's local add-ons folder.
+# Required because the supervisor runs in a separate Docker container.
+
+ADDON_DIR="/mnt/supervisor/addons/local"
+WORKSPACE_DIR="${WORKSPACE_DIRECTORY:-/workspaces/hass-codex-addon}"
+
+mkdir -p "${ADDON_DIR}"
+
+for addon_path in "${WORKSPACE_DIR}"/*/config.yaml; do
+    if [[ -f "${addon_path}" ]]; then
+        addon_folder="$(dirname "${addon_path}")"
+        addon_name="$(basename "${addon_folder}")"
+        target_path="${ADDON_DIR}/${addon_name}"
+
+        rm -rf "${target_path}"
+        cp -r "${addon_folder}" "${target_path}"
+        echo "Synced: ${addon_name}"
+    fi
+done
