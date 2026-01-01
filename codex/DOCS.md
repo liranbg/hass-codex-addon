@@ -18,8 +18,19 @@ Add-on format follows Home Assistant's developer docs: [Developing an add-on](ht
 The terminal automatically:
 
 - Logs in using your API key
+- Creates an `AGENTS.md` file in `/config` if one doesn't exist (provides Home Assistant context to Codex)
 - Starts Codex in **full-auto mode** (working directory: `/config`)
-- Restarts the session when Codex exits (type `exit` to quit)
+- Restarts the session when Codex exits (type `!exit` to quit)
+
+### AGENTS.md Template
+
+On first run, the add-on copies a bundled `AGENTS.tmpl.md` template to `/config/AGENTS.md`. This file provides Codex with context about the Home Assistant environment, including:
+
+- Key files and folders (`configuration.yaml`, `automations.yaml`, etc.)
+- Common tasks (adding automations, scenes, integrations)
+- Validation commands and safety guidelines
+
+You can customize this file to better suit your setup. It won't be overwritten if it already exists.
 
 ### Notes / Security
 
