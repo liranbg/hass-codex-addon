@@ -24,7 +24,7 @@ ADD https://github.com/home-assistant/cli/releases/latest/download/ha_${BUILD_AR
 RUN chmod +x /usr/local/bin/ha && ha --help
 
 # Install Codex CLI
-RUN npm install -g @openai/codex@^0.77.0
+RUN npm install -g @openai/codex@^0.79.0
 
 WORKDIR /config
 
