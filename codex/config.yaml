@@ -38,11 +38,18 @@ options:
   openai_api_key: ""
   model: ""
   resume_last_session: false
+  font_size: 18
+  working_directory: "/config"
 
 schema:
   openai_api_key: password
   model: str?
   resume_last_session: bool?
+  font_size: "int(10,40)?"
+  working_directory: str?
+
+backup_exclude:
+  - "*.log"
 
 # Allow the add-on to access the Home Assistant API
 hassio_api: true
