@@ -1,0 +1,69 @@
+name: Update Codex CLI version
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-codex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Get current and latest Codex versions
+        id: versions
+        run: |
+          # Extract current version spec from Dockerfile
+          current=$(grep -oP '@openai/codex@\K[^\s"]+' codex/Dockerfile)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+
+          # Fetch latest version from npm
+          latest=$(npm view @openai/codex version)
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+
+          echo "Current: $current"
+          echo "Latest:  $latest"
+
+      - name: Update Dockerfile
+        id: update
+        run: |
+          current="${{ steps.versions.outputs.current }}"
+          latest="${{ steps.versions.outputs.latest }}"
+
+          # Strip any semver range prefix (^, ~) from current to compare bare versions
+          current_bare="${current#^}"
+          current_bare="${current_bare#\~}"
+
+          if [ "$current_bare" = "$latest" ]; then
+            echo "Already up to date ($latest)"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Updating @openai/codex from $current to $latest"
+          sed -i "s|@openai/codex@${current}|@openai/codex@${latest}|" codex/Dockerfile
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create Pull Request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8
+        with:
+          commit-message: "deps: bump @openai/codex to ${{ steps.versions.outputs.latest }}"
+          branch: auto/update-codex
+          title: "deps: bump @openai/codex to ${{ steps.versions.outputs.latest }}"
+          body: |
+            Automated update of `@openai/codex` in `codex/Dockerfile`.
+
+            **Previous:** `${{ steps.versions.outputs.current }}`
+            **Updated:** `${{ steps.versions.outputs.latest }}`
+
+            [npm package](https://www.npmjs.com/package/@openai/codex)
+          labels: dependencies
+          delete-branch: true

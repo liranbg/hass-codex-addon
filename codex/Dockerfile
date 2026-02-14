@@ -16,6 +16,7 @@ RUN apk add --no-cache \
     npm \
     openssh-client \
     ttyd \
+    python3 \
     vim
 
 # Install Home Assistant CLI
