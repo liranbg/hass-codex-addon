@@ -37,10 +37,12 @@ map:
 options:
   openai_api_key: ""
   model: ""
+  resume_last_session: false
 
 schema:
   openai_api_key: password
   model: str?
+  resume_last_session: bool?
 
 # Allow the add-on to access the Home Assistant API
 hassio_api: true
