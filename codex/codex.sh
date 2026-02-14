@@ -35,11 +35,15 @@ while true; do
   echo "Working directory: $(pwd)"
   echo ""
   
+  codex_args=(--full-auto)
   if [[ -n "${CODEX_MODEL:-}" ]]; then
-    node "$(which codex)" --full-auto -m "${CODEX_MODEL}" || true
-  else
-    node "$(which codex)" --full-auto || true
+    codex_args+=(-m "${CODEX_MODEL}")
   fi
+  if [[ "${CODEX_RESUME_LAST:-false}" == "true" ]]; then
+    codex_args+=(resume --last)
+  fi
+
+  node "$(which codex)" "${codex_args[@]}" || true
   
   echo ""
   echo "Codex session ended. Press Enter to restart, or type '!exit' to quit."

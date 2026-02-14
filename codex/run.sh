@@ -8,6 +8,11 @@ fontSize=18
 
 bashio::log.info "Starting ttyd terminal for Codex on port ${port} (Ingress enabled)"
 
+# Persist Codex sessions across container restarts
+mkdir -p /data/.codex-sessions
+mkdir -p /root/.codex
+ln -sfn /data/.codex-sessions /root/.codex/sessions
+
 # Read configuration from Home Assistant Supervisor
 OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
 CODEX_MODEL="$(bashio::config 'model')"
@@ -21,8 +26,11 @@ export TTYD_TITLE=${title}
 export TTYD_FONT_SIZE=${fontSize}
 
 # OpenAI API key environment variable
+CODEX_RESUME_LAST="$(bashio::config 'resume_last_session')"
+
 export OPENAI_API_KEY
 export CODEX_MODEL
+export CODEX_RESUME_LAST
 
 exec ttyd \
   --interface 0.0.0.0 \
