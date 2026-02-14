@@ -42,6 +42,7 @@ From repo root:
 docker build \
   -f codex/Dockerfile \
   --build-arg BUILD_FROM="ghcr.io/home-assistant/aarch64-base:latest" \
+  --build-arg BUILD_ARCH=aarch64 \
   -t hass-codex-addon:dev \
   codex/
 ```
