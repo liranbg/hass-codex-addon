@@ -6,7 +6,7 @@ FROM ${BUILD_FROM} AS builder
 
 # hadolint ignore=DL3018
 RUN apk add --no-cache nodejs npm \
-  && npm install -g @openai/codex@0.104.0 \
+  && npm install -g @openai/codex@0.106.0 \
   && npm cache clean --force
 
 # ── Runtime stage ──
