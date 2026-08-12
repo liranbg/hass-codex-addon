@@ -64,7 +64,7 @@ sleep 1
 
 # Launch codex in an interactive loop so terminal stays open
 while true; do
-  codex_args=(--full-auto)
+  codex_args=(--sandbox workspace-write)
   if [[ -n "${CODEX_MODEL:-}" ]]; then
     codex_args+=(-m "${CODEX_MODEL}")
   fi
