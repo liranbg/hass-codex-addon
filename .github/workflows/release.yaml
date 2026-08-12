@@ -16,7 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [amd64, aarch64]
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: aarch64
+            platform: linux/arm64
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -49,6 +53,7 @@ jobs:
         with:
           context: codex
           push: true
+          platforms: ${{ matrix.platform }}
           tags: |
             ${{ env.IMAGE }}/${{ matrix.arch }}:${{ steps.version.outputs.version }}
             ${{ env.IMAGE }}/${{ matrix.arch }}:latest
