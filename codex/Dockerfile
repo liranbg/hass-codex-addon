@@ -30,6 +30,7 @@ RUN apk add --no-cache \
     openssh-client \
     ttyd \
     python3 \
+    bubblewrap \
     vim
 
 # Copy Codex CLI from builder and recreate symlink
