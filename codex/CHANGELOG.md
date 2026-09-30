@@ -2,6 +2,7 @@
 
 ## 0.1.1
 
+- Run new and resumed Codex sessions with --no-daemon to avoid background app-server process start-time failures in Home Assistant containers.
 - Add review_approvals (ask or approve) and allow_internet_access options.
 - Keep the workspace-write sandbox in both approval modes; approve uses Codex's automatic reviewer.
 - Enable automatic approval review and sandbox internet access by default; select ask for manual review.

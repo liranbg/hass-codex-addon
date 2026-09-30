@@ -58,6 +58,7 @@ class PermissionsTests(unittest.TestCase):
                                     if x.startswith("ARGS:"))
                         args = json.loads(line[5:])
                         expected = [
+                            "--no-daemon",
                             "--sandbox", "workspace-write",
                             "--ask-for-approval", "on-request",
                             "-c", f'approvals_reviewer="{reviewer}"',

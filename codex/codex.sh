@@ -76,6 +76,8 @@ sleep 1
 # Launch codex in an interactive loop so terminal stays open
 while true; do
   codex_args=(
+    # HA containers can prevent the daemon from reading its process start time.
+    --no-daemon
     --sandbox workspace-write
     --ask-for-approval on-request
     -c "approvals_reviewer=\"${approvals_reviewer}\""

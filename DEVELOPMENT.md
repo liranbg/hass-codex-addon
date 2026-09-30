@@ -18,7 +18,7 @@ Assumption: commands are run from the **repository root** unless stated otherwis
   - Starts `ttyd` on **port 8000**, which spawns [`codex/codex.sh`](codex/codex.sh)
 - **Codex wrapper script**: [`codex/codex.sh`](codex/codex.sh)
   - Authenticates with OpenAI using `OPENAI_API_KEY`
-  - Launches `codex --sandbox workspace-write --ask-for-approval on-request [-m MODEL]` in an interactive loop
+  - Launches `codex --no-daemon --sandbox workspace-write --ask-for-approval on-request [-m MODEL]` in an interactive loop
 - **Add-on metadata/options**: [`codex/config.yaml`](codex/config.yaml)
   - Ingress enabled, `ingress_port: 8000`
 
@@ -175,7 +175,7 @@ The `docker run` command mounts this directory to `/data`, making the config ava
 ┌────────────────────▼────────────────────────────────────────┐
 │ /codex.sh                                                   │
 │   1. Logs into Codex CLI with OPENAI_API_KEY                │
-│   2. Launches `codex --sandbox workspace-write --ask-for-approval on-request [-m MODEL]`                │
+│   2. Launches `codex --no-daemon --sandbox workspace-write --ask-for-approval on-request [-m MODEL]`                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
