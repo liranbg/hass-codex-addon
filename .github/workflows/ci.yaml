@@ -49,20 +49,19 @@ jobs:
         run: bash tests/test_resume_session.sh hass-codex-addon:dev
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
           - arch: amd64
             platform: linux/amd64
+            runner: ubuntu-24.04
           - arch: aarch64
             platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -79,8 +78,15 @@ jobs:
           context: codex
           platforms: ${{ matrix.platform }}
           push: false
+          load: true
+          tags: hass-codex-addon:ci-${{ matrix.arch }}
           build-args: |
             BUILD_FROM=${{ steps.base.outputs.image }}
             BUILD_ARCH=${{ matrix.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Verify CLI binaries (${{ matrix.arch }})
+        run: |
+          docker run --rm --entrypoint codex hass-codex-addon:ci-${{ matrix.arch }} --version
+          docker run --rm --entrypoint ha hass-codex-addon:ci-${{ matrix.arch }} --help
