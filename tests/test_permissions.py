@@ -44,7 +44,7 @@ class PermissionsTests(unittest.TestCase):
         )
 
     def test_review_network_and_resume_combinations(self):
-        for review, reviewer in (("regular", "user"), ("approve", "auto_review")):
+        for review, reviewer in (("ask", "user"), ("approve", "auto_review")):
             for network in ("false", "true"):
                 for resume in ("false", "true"):
                     with self.subTest(review=review, network=network, resume=resume):
@@ -68,11 +68,11 @@ class PermissionsTests(unittest.TestCase):
                             expected += ["resume", "--last"]
                         self.assertEqual(args, expected)
 
-    def test_defaults_preserve_regular_review_and_block_network(self):
+    def test_defaults_enable_automatic_review_and_network(self):
         result = self.launch()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('approvals_reviewer=\\"user\\"', result.stdout)
-        self.assertIn("sandbox_workspace_write.network_access=false", result.stdout)
+        self.assertIn('approvals_reviewer=\\"auto_review\\"', result.stdout)
+        self.assertIn("sandbox_workspace_write.network_access=true", result.stdout)
 
     def test_invalid_settings_fail_before_codex_starts(self):
         for settings in ({"CODEX_REVIEW_APPROVALS": "never"},
@@ -102,9 +102,9 @@ bashio::config() {
 ''')
         self.stub("ttyd", '#!/bin/sh\nprintf "OPTIONS:%s:%s\\n" '
                   '"$CODEX_REVIEW_APPROVALS" "$CODEX_ALLOW_INTERNET_ACCESS"\n')
-        for values, expected in (({}, "regular:false"),
-                                 ({"TEST_REVIEW": "approve", "TEST_NETWORK": "true"},
-                                  "approve:true")):
+        for values, expected in (({}, "approve:true"),
+                                 ({"TEST_REVIEW": "ask", "TEST_NETWORK": "false"},
+                                  "ask:false")):
             result = subprocess.run(
                 ["bash", str(startup)], text=True, capture_output=True,
                 env=dict(self.env, BASH_ENV=str(functions), **values), timeout=10,

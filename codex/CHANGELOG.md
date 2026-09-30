@@ -2,9 +2,9 @@
 
 ## 0.1.1
 
-- Add review_approvals (regular or approve) and allow_internet_access options.
+- Add review_approvals (ask or approve) and allow_internet_access options.
 - Keep the workspace-write sandbox in both approval modes; approve uses Codex's automatic reviewer.
-- Preserve regular approval prompts and disabled sandbox internet access by default.
+- Enable automatic approval review and sandbox internet access by default; select ask for manual review.
 
 ## 0.1.0
 

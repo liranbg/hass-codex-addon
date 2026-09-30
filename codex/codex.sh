@@ -12,13 +12,13 @@ trap cleanup SIGTERM SIGINT
 cd "${CODEX_WORKING_DIR:-/config}"
 
 # Keep permissions explicit so local Codex config cannot override add-on options.
-case "${CODEX_REVIEW_APPROVALS:-regular}" in
-  regular) approvals_reviewer=user ;;
+case "${CODEX_REVIEW_APPROVALS:-approve}" in
+  ask) approvals_reviewer=user ;;
   approve) approvals_reviewer=auto_review ;;
-  *) echo "ERROR: review_approvals must be regular or approve."; exit 1 ;;
+  *) echo "ERROR: review_approvals must be ask or approve."; exit 1 ;;
 esac
-case "${CODEX_ALLOW_INTERNET_ACCESS:-false}" in
-  true|false) internet_access="${CODEX_ALLOW_INTERNET_ACCESS:-false}" ;;
+case "${CODEX_ALLOW_INTERNET_ACCESS:-true}" in
+  true|false) internet_access="${CODEX_ALLOW_INTERNET_ACCESS:-true}" ;;
   *) echo "ERROR: allow_internet_access must be true or false."; exit 1 ;;
 esac
 

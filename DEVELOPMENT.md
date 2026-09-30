@@ -154,8 +154,8 @@ The `docker run` command mounts this directory to `/data`, making the config ava
 | ---------------- | -------- | ---------------- | --------------------------------------------------------------------- |
 | `openai_api_key` | Yes      | `OPENAI_API_KEY` | Your OpenAI API key                                                   |
 | `model`          | No       | `CODEX_MODEL`    | Model override (e.g., `gpt-5.1-codex-mini`). Empty uses Codex default                 |
-| `review_approvals` | No | `CODEX_REVIEW_APPROVALS` | `regular` (default) uses user review; `approve` uses automatic review |
-| `allow_internet_access` | No | `CODEX_ALLOW_INTERNET_ACCESS` | Allow sandbox command networking; defaults to `false` |
+| `review_approvals` | No | `CODEX_REVIEW_APPROVALS` | `approve` (default) uses automatic review; `ask` uses user review |
+| `allow_internet_access` | No | `CODEX_ALLOW_INTERNET_ACCESS` | Allow sandbox command networking; defaults to `true` |
 
 ---
 

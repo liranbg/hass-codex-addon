@@ -11,8 +11,8 @@ Add-on format follows Home Assistant's developer docs: [Developing an add-on](ht
 - **resume_last_session** (optional, default `false`): Resume your most recent Codex session on startup.
 - **font_size** (optional, default `18`): Terminal font size (range: 10–40).
 - **working_directory** (optional, default `/config`): The directory Codex operates in.
-- **review_approvals** (optional, default `regular`): `regular` shows approval requests to you. `approve` uses Codex's automatic reviewer for eligible requests; it can approve or reject them rather than approving everything.
-- **allow_internet_access** (optional, default `false`): Allow outbound network access for commands inside the Codex sandbox. This setting does not disable the OpenAI connection needed to run Codex.
+- **review_approvals** (optional, default `approve`): `ask` shows approval requests to you. `approve` uses Codex's automatic reviewer for eligible requests; it can approve or reject them rather than approving everything.
+- **allow_internet_access** (optional, default `true`): Allow outbound network access for commands inside the Codex sandbox. This setting does not disable the OpenAI connection needed to run Codex.
 
 For automatic review with internet access, set:
 
@@ -74,7 +74,7 @@ You can customize this file to better suit your setup. It won't be overwritten i
 
 - The terminal is accessible through Home Assistant Ingress (Supervisor handles authentication).
 - The API key is stored in the add-on configuration and exported to the terminal session.
-- The **workspace-write sandbox** allows Codex to execute commands and create, modify, and delete files in your working directory. Eligible requests to go beyond the sandbox are reviewed by you (`regular`) or the automatic reviewer (`approve`). Use with caution and review changes before restarting Home Assistant.
+- The **workspace-write sandbox** allows Codex to execute commands and create, modify, and delete files in your working directory. Eligible requests to go beyond the sandbox are reviewed by you (`ask`) or the automatic reviewer (`approve`). Use with caution and review changes before restarting Home Assistant.
 - The working directory defaults to `/config`, which is your Home Assistant configuration folder.
 
 ### Troubleshooting
@@ -93,6 +93,10 @@ You can customize this file to better suit your setup. It won't be overwritten i
 **Codex exits immediately or crashes**
 - Check if your API key has billing/quota issues at [OpenAI Usage](https://platform.openai.com/usage).
 - Try a different model (e.g., `gpt-5.1-codex-mini`) in the add-on configuration.
+
+**"failed to read start time for pid-managed app server"**
+- The background Codex server failed during process tracking. The add-on launches new and resumed sessions with `--no-daemon` to avoid this startup path.
+- Update to an add-on release containing this fix, or rebuild from the updated source, then reopen the terminal.
 
 **Changes not taking effect after editing configuration**
 - You must restart the add-on after changing any configuration option.

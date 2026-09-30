@@ -39,13 +39,13 @@ repository installations use numbered releases.
 ### Configure
 
 1. Set `openai_api_key` in the add-on configuration (get one from [OpenAI Platform](https://platform.openai.com/api-keys)).
-2. Optionally set a `model`, `review_approvals` (`regular` or `approve`), and `allow_internet_access` (`false` or `true`).
+2. Optionally set a `model`, `review_approvals` (`ask` or `approve`), and `allow_internet_access` (`false` or `true`).
 3. Start the add-on.
 4. Click **Open Web UI** or find it in the sidebar.
 
 ### Usage
 
-The add-on starts Codex with the workspace-write sandbox and access to your Home Assistant configuration. By default, you review approval requests and commands have no sandbox internet access. Set `review_approvals: approve` to use the automatic reviewer and `allow_internet_access: true` to allow outbound command traffic. The automatic reviewer can reject requests.
+The add-on starts Codex with the workspace-write sandbox and access to your Home Assistant configuration. By default, Codex uses automatic approval review and commands have sandbox internet access. Set `review_approvals: ask` to review requests yourself and `allow_internet_access: false` to disable outbound command traffic. The automatic reviewer can reject requests.
 
 - Working directory: `/config` (your HA config folder)
 - When Codex exits, press Enter to restart or type `!exit` to quit
