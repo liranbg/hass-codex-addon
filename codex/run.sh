@@ -43,11 +43,15 @@ export TTYD_FONT_SIZE=${FONT_SIZE:-18}
 # OpenAI API key environment variable
 CODEX_RESUME_LAST="$(bashio::config 'resume_last_session')"
 CODEX_WORKING_DIR="$(bashio::config 'working_directory')"
+CODEX_REVIEW_APPROVALS="$(bashio::config 'review_approvals')"
+CODEX_ALLOW_INTERNET_ACCESS="$(bashio::config 'allow_internet_access')"
 
 export OPENAI_API_KEY
 export CODEX_MODEL
 export CODEX_RESUME_LAST
 export CODEX_WORKING_DIR="${CODEX_WORKING_DIR:-/config}"
+export CODEX_REVIEW_APPROVALS="${CODEX_REVIEW_APPROVALS:-approve}"
+export CODEX_ALLOW_INTERNET_ACCESS="${CODEX_ALLOW_INTERNET_ACCESS:-true}"
 
 ttyd \
   --interface 0.0.0.0 \

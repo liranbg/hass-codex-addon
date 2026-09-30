@@ -7,7 +7,7 @@ The add-on format follows Home Assistant’s add-on development docs: [Developin
 ### What you get
 
 - A **terminal in Home Assistant** (Ingress) powered by `ttyd`
-- The **`codex` CLI** running in **full-auto mode**
+- The **`codex` CLI** with a **workspace-write sandbox** and configurable approval review
 - Direct access to your **Home Assistant config directory** (`/config`)
 
 ### Install (as an add-on repository)
@@ -39,13 +39,13 @@ repository installations use numbered releases.
 ### Configure
 
 1. Set `openai_api_key` in the add-on configuration (get one from [OpenAI Platform](https://platform.openai.com/api-keys)).
-2. Optionally set a `model` (e.g., `gpt-4o`).
+2. Optionally set a `model`, `review_approvals` (`ask` or `approve`), and `allow_internet_access` (`false` or `true`).
 3. Start the add-on.
 4. Click **Open Web UI** or find it in the sidebar.
 
 ### Usage
 
-The add-on automatically starts Codex in full-auto mode with access to your Home Assistant configuration.
+The add-on starts Codex with the workspace-write sandbox and access to your Home Assistant configuration. By default, Codex uses automatic approval review and commands have sandbox internet access. Set `review_approvals: ask` to review requests yourself and `allow_internet_access: false` to disable outbound command traffic. The automatic reviewer can reject requests.
 
 - Working directory: `/config` (your HA config folder)
-- When Codex exits, press Enter to restart or type `exit` to quit
+- When Codex exits, press Enter to restart or type `!exit` to quit

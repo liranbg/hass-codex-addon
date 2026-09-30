@@ -30,7 +30,7 @@ run_codex_stub() {
     -e CODEX_MODEL="$model_val" \
     -e OPENAI_API_KEY="sk-test" \
     --entrypoint sh \
-    "$IMAGE" -c '
+    "$IMAGE" -ec '
       # Stub node to capture args passed to codex
       mv /usr/bin/node /usr/bin/node.real
       printf "#!/bin/sh\necho \"NODE_ARGS: \$@\"\nexit 1\n" > /usr/bin/node
@@ -38,6 +38,12 @@ run_codex_stub() {
 
       # Stub codex for the login calls (which use codex directly, not node)
       real_codex=$(which codex)
+      # Verify the real bundled CLI accepts the foreground option for this mode.
+      if [ "$CODEX_RESUME_LAST" = "true" ]; then
+        /usr/bin/node.real "$real_codex" --no-daemon resume --help >/dev/null
+      else
+        /usr/bin/node.real "$real_codex" --no-daemon --help >/dev/null
+      fi
       printf "#!/bin/sh\nexit 0\n" > "$real_codex"
       chmod +x "$real_codex"
 
@@ -83,8 +89,8 @@ cleanup
 echo "[2] codex.sh includes 'resume --last' when CODEX_RESUME_LAST=true"
 
 output=$(run_codex_stub "true" "")
-if echo "$output" | grep -q "NODE_ARGS:.*resume --last"; then
-  pass "codex invoked with 'resume --last'"
+if echo "$output" | grep -q "NODE_ARGS:.*--no-daemon.*resume --last"; then
+  pass "codex invoked with '--no-daemon' and 'resume --last'"
 else
   fail "codex was NOT invoked with 'resume --last'. Output: $(echo "$output" | grep NODE_ARGS)"
 fi
@@ -93,8 +99,8 @@ fi
 echo "[3] codex.sh omits 'resume --last' when CODEX_RESUME_LAST=false"
 
 output=$(run_codex_stub "false" "")
-if echo "$output" | grep -q "NODE_ARGS:" && ! echo "$output" | grep -q "resume --last"; then
-  pass "codex invoked WITHOUT 'resume --last'"
+if echo "$output" | grep -q "NODE_ARGS:.*--no-daemon" && ! echo "$output" | grep -q "resume --last"; then
+  pass "codex invoked with '--no-daemon' WITHOUT 'resume --last'"
 else
   fail "unexpected output: $(echo "$output" | grep NODE_ARGS)"
 fi
@@ -103,8 +109,8 @@ fi
 echo "[4] codex.sh passes both -m MODEL and resume --last"
 
 output=$(run_codex_stub "true" "gpt-5")
-if echo "$output" | grep -q "NODE_ARGS:.*-m gpt-5" && echo "$output" | grep -q "NODE_ARGS:.*resume --last"; then
-  pass "codex invoked with '-m gpt-5' and 'resume --last'"
+if echo "$output" | grep -q "NODE_ARGS:.*--no-daemon.*-m gpt-5.*resume --last"; then
+  pass "codex invoked with '--no-daemon', '-m gpt-5' and 'resume --last'"
 else
   fail "expected both '-m gpt-5' and 'resume --last'. Output: $(echo "$output" | grep NODE_ARGS)"
 fi
