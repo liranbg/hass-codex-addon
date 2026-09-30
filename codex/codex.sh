@@ -11,6 +11,17 @@ trap cleanup SIGTERM SIGINT
 
 cd "${CODEX_WORKING_DIR:-/config}"
 
+# Keep permissions explicit so local Codex config cannot override add-on options.
+case "${CODEX_REVIEW_APPROVALS:-regular}" in
+  regular) approvals_reviewer=user ;;
+  approve) approvals_reviewer=auto_review ;;
+  *) echo "ERROR: review_approvals must be regular or approve."; exit 1 ;;
+esac
+case "${CODEX_ALLOW_INTERNET_ACCESS:-false}" in
+  true|false) internet_access="${CODEX_ALLOW_INTERNET_ACCESS:-false}" ;;
+  *) echo "ERROR: allow_internet_access must be true or false."; exit 1 ;;
+esac
+
 # Ensure AGENTS.md exists in working directory
 if [[ ! -f "AGENTS.md" ]]; then
   echo "Creating AGENTS.md from template..."
@@ -64,7 +75,12 @@ sleep 1
 
 # Launch codex in an interactive loop so terminal stays open
 while true; do
-  codex_args=(--sandbox workspace-write)
+  codex_args=(
+    --sandbox workspace-write
+    --ask-for-approval on-request
+    -c "approvals_reviewer=\"${approvals_reviewer}\""
+    -c "sandbox_workspace_write.network_access=${internet_access}"
+  )
   if [[ -n "${CODEX_MODEL:-}" ]]; then
     codex_args+=(-m "${CODEX_MODEL}")
   fi

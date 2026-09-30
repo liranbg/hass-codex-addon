@@ -18,7 +18,7 @@ Assumption: commands are run from the **repository root** unless stated otherwis
   - Starts `ttyd` on **port 8000**, which spawns [`codex/codex.sh`](codex/codex.sh)
 - **Codex wrapper script**: [`codex/codex.sh`](codex/codex.sh)
   - Authenticates with OpenAI using `OPENAI_API_KEY`
-  - Launches `codex --full-auto [-m MODEL]` in an interactive loop
+  - Launches `codex --sandbox workspace-write --ask-for-approval on-request [-m MODEL]` in an interactive loop
 - **Add-on metadata/options**: [`codex/config.yaml`](codex/config.yaml)
   - Ingress enabled, `ingress_port: 8000`
 
@@ -154,6 +154,8 @@ The `docker run` command mounts this directory to `/data`, making the config ava
 | ---------------- | -------- | ---------------- | --------------------------------------------------------------------- |
 | `openai_api_key` | Yes      | `OPENAI_API_KEY` | Your OpenAI API key                                                   |
 | `model`          | No       | `CODEX_MODEL`    | Model override (e.g., `gpt-5.1-codex-mini`). Empty uses Codex default                 |
+| `review_approvals` | No | `CODEX_REVIEW_APPROVALS` | `regular` (default) uses user review; `approve` uses automatic review |
+| `allow_internet_access` | No | `CODEX_ALLOW_INTERNET_ACCESS` | Allow sandbox command networking; defaults to `false` |
 
 ---
 
@@ -173,7 +175,7 @@ The `docker run` command mounts this directory to `/data`, making the config ava
 ┌────────────────────▼────────────────────────────────────────┐
 │ /codex.sh                                                   │
 │   1. Logs into Codex CLI with OPENAI_API_KEY                │
-│   2. Launches `codex --full-auto [-m MODEL]`                │
+│   2. Launches `codex --sandbox workspace-write --ask-for-approval on-request [-m MODEL]`                │
 └─────────────────────────────────────────────────────────────┘
 ```
 

@@ -11,6 +11,19 @@ Add-on format follows Home Assistant's developer docs: [Developing an add-on](ht
 - **resume_last_session** (optional, default `false`): Resume your most recent Codex session on startup.
 - **font_size** (optional, default `18`): Terminal font size (range: 10–40).
 - **working_directory** (optional, default `/config`): The directory Codex operates in.
+- **review_approvals** (optional, default `regular`): `regular` shows approval requests to you. `approve` uses Codex's automatic reviewer for eligible requests; it can approve or reject them rather than approving everything.
+- **allow_internet_access** (optional, default `false`): Allow outbound network access for commands inside the Codex sandbox. This setting does not disable the OpenAI connection needed to run Codex.
+
+For automatic review with internet access, set:
+
+```yaml
+review_approvals: approve
+allow_internet_access: true
+```
+
+Both review modes use `approval_policy = "on-request"` and the **`workspace-write` sandbox**. The add-on explicitly passes these settings to each new or resumed Codex session. Restart the add-on after changing the options.
+
+See the [OpenAI sandbox documentation](https://learn.chatgpt.com/docs/sandboxing) for approval and network behavior.
 
 ### Usage
 
@@ -22,7 +35,7 @@ The terminal automatically:
 
 - Logs in using your API key
 - Creates an `AGENTS.md` file in the working directory if one doesn't exist (provides Home Assistant context to Codex)
-- Starts Codex in **full-auto mode**
+- Starts Codex with the **workspace-write sandbox** and your approval review and internet access settings
 - Restarts the session when Codex exits (type `!exit` to quit)
 
 ### Examples
@@ -53,7 +66,7 @@ You can customize this file to better suit your setup. It won't be overwritten i
 
 ### API Usage & Costs
 
-- **Full-auto mode** sends requests to the OpenAI API automatically. Depending on the model and task complexity, this can consume significant API credits.
+- Codex sends requests to the OpenAI API while working. Depending on the model and task complexity, this can consume significant API credits.
 - Monitor your usage at [OpenAI Usage](https://platform.openai.com/usage).
 - Consider using a less expensive model (e.g., `gpt-5.1-codex-mini`) for routine tasks.
 
@@ -61,7 +74,7 @@ You can customize this file to better suit your setup. It won't be overwritten i
 
 - The terminal is accessible through Home Assistant Ingress (Supervisor handles authentication).
 - The API key is stored in the add-on configuration and exported to the terminal session.
-- **Full-auto mode** allows Codex to execute commands automatically — it can create, modify, and delete files in your `/config` directory. Use with caution and review changes before restarting Home Assistant.
+- The **workspace-write sandbox** allows Codex to execute commands and create, modify, and delete files in your working directory. Eligible requests to go beyond the sandbox are reviewed by you (`regular`) or the automatic reviewer (`approve`). Use with caution and review changes before restarting Home Assistant.
 - The working directory defaults to `/config`, which is your Home Assistant configuration folder.
 
 ### Troubleshooting

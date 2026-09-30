@@ -43,6 +43,8 @@ options:
   resume_last_session: false
   font_size: 18
   working_directory: "/config"
+  review_approvals: regular
+  allow_internet_access: false
 
 schema:
   openai_api_key: password
@@ -50,6 +52,8 @@ schema:
   resume_last_session: bool?
   font_size: "int(10,40)?"
   working_directory: str?
+  review_approvals: "list(regular|approve)?"
+  allow_internet_access: bool?
 
 backup_exclude:
   - "*.log"
