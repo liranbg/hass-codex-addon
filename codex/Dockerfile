@@ -14,6 +14,12 @@ RUN apk add --no-cache nodejs npm \
 FROM ${BUILD_FROM}
 
 ARG BUILD_ARCH
+ARG BUILD_VERSION=dev
+
+LABEL io.hass.version="${BUILD_VERSION}" \
+      io.hass.type="addon" \
+      io.hass.arch="${BUILD_ARCH}" \
+      org.opencontainers.image.source="https://github.com/liranbg/hass-codex-addon"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

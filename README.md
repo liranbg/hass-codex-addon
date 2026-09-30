@@ -20,6 +20,22 @@ The add-on format follows Home Assistant’s add-on development docs: [Developin
    ```
 4. Refresh and install **OpenAI Codex (Terminal)** add-on.
 
+### Updates
+
+Stable releases start at **0.1.0**. Home Assistant downloads pre-built images
+for your architecture and offers updates when a new add-on version is published.
+The bundled Codex CLI version is listed in [`codex/CHANGELOG.md`](codex/CHANGELOG.md).
+
+Existing installations of this repository upgrade in place: the add-on slug,
+configuration, and persistent sessions stay the same. After the first release,
+refresh the Add-on Store and open the add-on's page to install the update.
+Enable automatic updates there if you want Home Assistant to install future
+releases automatically. If you installed a local copy under `/addons` instead
+of using this repository, install the repository version to receive its updates.
+
+The `unstable` container tag remains available for development; Home Assistant
+repository installations use numbered releases.
+
 ### Configure
 
 1. Set `openai_api_key` in the add-on configuration (get one from [OpenAI Platform](https://platform.openai.com/api-keys)).
