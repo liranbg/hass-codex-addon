@@ -3,6 +3,8 @@ name: OpenAI Codex (Terminal)
 slug: oai_codex_terminal
 description: "OpenAI Codex CLI interface"
 url: "https://github.com/liranbg/hass-codex-addon"
+# Release automation sets this and image only after publishing both architectures.
+# The intended next release is recorded in VERSION.
 version: dev
 startup: services
 init: false

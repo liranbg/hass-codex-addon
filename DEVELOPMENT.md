@@ -232,3 +232,59 @@ Before committing changes:
 - [ ] ttyd web UI loads at `http://localhost:8000/`
 - [ ] Codex CLI launches inside the terminal
 - [ ] (If API key provided) Codex authenticates successfully
+
+## Stable releases
+
+`codex/VERSION` is the next intended add-on version, starting at `0.1.0`.
+`codex/config.yaml` advertises the last successfully published version to Home
+Assistant. These values deliberately differ while a release is pending. For
+the initial migration, `config.yaml` stays at `dev` until the `0.1.0` images
+are ready; the Release workflow then sets its version and `image` URL.
+
+For each release:
+
+1. Advance `codex/VERSION` and add an entry to `codex/CHANGELOG.md` in your PR.
+   Do not manually advance the version in `config.yaml` or add an image tag.
+2. Merge the PR after CI passes. The Release workflow validates the merged
+   commit again, including both architecture builds and the container tests.
+3. The workflow publishes `ghcr.io/liranbg/hass-codex-addon/{arch}:VERSION`
+   for amd64 and aarch64, with Home Assistant image labels.
+4. It creates the `vVERSION` GitHub release and commits the published version
+   and image URL to `config.yaml` on `main`. Only then does Home Assistant
+   see the update. The commit uses `GITHUB_TOKEN`, so it does not recursively
+   trigger another push workflow.
+
+The daily Codex updater prepares the Dockerfile pin, a patch bump, and changelog
+in one PR. You decide when to merge it. It also explicitly dispatches CI for
+the bot-created branch. While a release is pending, it defers further updates
+so another Codex version cannot overwrite the pending release.
+
+For add-on changes unrelated to Codex, choose a patch, minor, or major bump in
+`codex/VERSION` and document the changes yourself. Merges without a version
+bump keep publishing the development image but do not create a stable release.
+
+### Repository setup and recovery
+
+- GitHub Actions must be allowed to create pull requests and write repository
+  contents and packages. The Release workflow needs permission to commit to
+  `main`; any future branch protection must allow that publication commit.
+- Both GHCR architecture packages must be **public** so Home Assistant can
+  pull them without GitHub credentials. Check their package visibility before
+  the first installation/update using pre-built images.
+- A failed build leaves the advertised Home Assistant version unchanged.
+  Fix the build and merge the fix, or rerun Release for the same commit.
+- Release runs are serialized. If `main` advances during a build, the stale
+  run stops before advertising its images; the newer run handles publication.
+- If a GitHub release exists but the metadata commit failed, rerun that run
+  after restoring write permissions. If `main` has since changed, advance
+  `codex/VERSION` and its changelog; an existing release tag cannot be reused
+  for a different source commit.
+- You can manually run **Release** on `main` using GitHub Actions. No manual
+  tag push is needed. Nothing is released merely by pushing a feature branch.
+
+Local release automation checks (no Docker required):
+
+```bash
+python3 scripts/release.py check
+python3 -m unittest discover -s tests -p 'test_*.py'
+```

@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
+
+concurrency:
+  group: update-codex
+  cancel-in-progress: false
 
 jobs:
   update-codex:
@@ -31,35 +36,25 @@ jobs:
           echo "Current: $current"
           echo "Latest:  $latest"
 
-      - name: Update Dockerfile
+      - name: Prepare Codex and add-on release update
         id: update
-        run: |
-          current="${{ steps.versions.outputs.current }}"
-          latest="${{ steps.versions.outputs.latest }}"
-
-          # Strip any semver range prefix (^, ~) from current to compare bare versions
-          current_bare="${current#^}"
-          current_bare="${current_bare#\~}"
-
-          if [ "$current_bare" = "$latest" ]; then
-            echo "Already up to date ($latest)"
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "Updating @openai/codex from $current to $latest"
-          sed -i "s|@openai/codex@${current}|@openai/codex@${latest}|" codex/Dockerfile
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+        env:
+          LATEST: ${{ steps.versions.outputs.latest }}
+        run: python3 scripts/release.py update --codex-version "$LATEST" >> "$GITHUB_OUTPUT"
 
       - name: Create Pull Request
         if: steps.update.outputs.changed == 'true'
+        id: pr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           commit-message: "deps: bump @openai/codex to ${{ steps.versions.outputs.latest }}"
           branch: auto/update-codex
           title: "deps: bump @openai/codex to ${{ steps.versions.outputs.latest }}"
           body: |
-            Automated update of `@openai/codex` in `codex/Dockerfile`.
+            Updates the Codex CLI pin, advances the add-on patch release in
+            `codex/VERSION`, and records the change in `codex/CHANGELOG.md`.
+            Merging this PR triggers validation and stable image publishing.
+            Home Assistant metadata advances only after both images are available.
 
             **Previous:** `${{ steps.versions.outputs.current }}`
             **Updated:** `${{ steps.versions.outputs.latest }}`
@@ -67,3 +62,9 @@ jobs:
             [npm package](https://www.npmjs.com/package/@openai/codex)
           labels: dependencies
           delete-branch: true
+
+      - name: Run CI for the automated update branch
+        if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yaml --ref auto/update-codex
