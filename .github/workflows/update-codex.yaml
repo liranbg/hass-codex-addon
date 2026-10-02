@@ -50,6 +50,7 @@ jobs:
           commit-message: "deps: bump @openai/codex to ${{ steps.versions.outputs.latest }}"
           branch: auto/update-codex
           title: "deps: bump @openai/codex to ${{ steps.versions.outputs.latest }}"
+          token: ${{ secrets.CODEX_UPDATE_TOKEN }}
           body: |
             Updates the Codex CLI pin, advances the add-on patch release in
             `codex/VERSION`, and records the change in `codex/CHANGELOG.md`.
@@ -62,9 +63,3 @@ jobs:
             [npm package](https://www.npmjs.com/package/@openai/codex)
           labels: dependencies
           delete-branch: true
-
-      - name: Run CI for the automated update branch
-        if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run ci.yaml --ref auto/update-codex
