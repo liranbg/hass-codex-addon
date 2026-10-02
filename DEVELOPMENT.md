@@ -268,7 +268,7 @@ Before committing changes:
 `codex/config.yaml` advertises the last successfully published version to Home
 Assistant. These values deliberately differ while a release is pending. For
 the initial migration, `config.yaml` stays at `dev` until the `0.1.0` images
-are ready; the Release workflow then proposes its version and `image` URL in a PR.
+are ready; the Release workflow then checks and publishes its version and `image` URL.
 
 For each release:
 
@@ -278,13 +278,13 @@ For each release:
    commit again, including both architecture builds and the container tests.
 3. The workflow publishes `ghcr.io/liranbg/hass-codex-addon/{arch}:VERSION`
    for amd64 and aarch64, with Home Assistant image labels.
-4. It creates the `vVERSION` GitHub release and opens an `auto/publish-VERSION`
-   PR updating the published version and image URL in `config.yaml`. The existing
-   `CODEX_UPDATE_TOKEN` starts PR CI automatically. Merge that PR once the required
-   checks pass; only then does Home Assistant see the update. The resulting main
-   workflow sees no pending version and skips image publication.
-   If runtime changes land before the metadata PR merges, close that PR and
-   advance `codex/VERSION` to publish the new source under a new release tag.
+4. It creates the `vVERSION` GitHub release and stages a metadata commit on a
+   temporary `auto/publish-RUN_ID-RUN_ATTEMPT` branch. It explicitly dispatches
+   CI on that branch and waits for that exact commit's checks to pass. Then it
+   fast-forwards `main` to the checked commit and deletes the temporary branch.
+   Home Assistant sees the update only after both images and all checks succeed.
+   No publication PR, additional merge, or protection bypass is needed.
+   The push uses `GITHUB_TOKEN`, so it does not trigger another release run.
 
 The daily Codex updater prepares the Dockerfile pin, a patch bump, and changelog
 in one PR. You decide when to merge it. It also explicitly dispatches CI for
@@ -297,21 +297,25 @@ bump keep publishing the development image but do not create a stable release.
 
 ### Repository setup and recovery
 
-- GitHub Actions must be allowed to create pull requests and write repository
-  contents and packages. `CODEX_UPDATE_TOKEN` must be able to write repository
-  contents and create pull requests, as for the daily updater. Release metadata
-  goes through normal PR checks; no branch-protection bypass is needed.
+- Release automation uses `GITHUB_TOKEN` with contents, packages, and actions
+  permissions to publish images, stage metadata, and dispatch CI. `main` must
+  allow fast-forward pushes with passing required status checks; a rule requiring
+  all changes through PRs would prevent this process. No bypass or extra secret
+  is needed. The daily updater separately uses `CODEX_UPDATE_TOKEN` for its PRs.
 - Both GHCR architecture packages must be **public** so Home Assistant can
   pull them without GitHub credentials. Check their package visibility before
   the first installation/update using pre-built images.
 - A failed build leaves the advertised Home Assistant version unchanged.
   Fix the build and merge the fix, or rerun Release for the same commit.
-- Release runs are serialized. If `main` advances during a build, the stale
-  run stops before advertising its images; the newer run handles publication.
-- If a GitHub release exists but the metadata PR could not be created, rerun
-  that run after restoring token permissions. If `main` has since changed, advance
+- Release runs are serialized. If `main` advances during image publication or
+  metadata CI, the stale run stops before advertising its images. A concurrent
+  push cannot be overwritten because the publication push is never forced.
+- If a GitHub release exists but metadata checks or publication failed, rerun
+  that run after fixing the issue. If `main` has since changed, advance
   `codex/VERSION` and its changelog; an existing release tag cannot be reused
   for a different source commit.
+- Failed publication leaves its temporary branch available for inspection;
+  delete it after recovery if it is no longer needed.
 - To recover an older direct-push publication failure, verify both images and
   the release tag exist and that main's runtime files match the tagged source.
   Run `python3 scripts/release.py promote` and submit the metadata change through
