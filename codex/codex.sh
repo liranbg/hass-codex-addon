@@ -74,11 +74,16 @@ echo "  Type '!exit' after a session to quit."
 echo "========================================="
 echo ""
 
-# Authenticate with OpenAI
-if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+# Use file credentials in the persistent CODEX_HOME, including interactive login.
+auth_args=(-c 'cli_auth_credentials_store="file"')
+
+# Preserve the last login method instead of overwriting it on every connection.
+if codex "${auth_args[@]}" login status >/dev/null 2>&1; then
+  echo "Reusing saved Codex login."
+elif [[ -n "${OPENAI_API_KEY:-}" ]]; then
   echo "Authenticating with OpenAI API key..."
-  if echo "${OPENAI_API_KEY}" | codex login --with-api-key 2>/dev/null; then
-    if codex login status 2>/dev/null | grep -q "Logged in"; then
+  if printf '%s\n' "${OPENAI_API_KEY}" | codex "${auth_args[@]}" login --with-api-key 2>/dev/null; then
+    if codex "${auth_args[@]}" login status >/dev/null 2>&1; then
       echo "Logged in successfully."
     else
       echo "WARNING: Login status could not be verified."
@@ -87,8 +92,8 @@ if [[ -n "${OPENAI_API_KEY:-}" ]]; then
     echo "WARNING: Login failed. Please check your API key in the add-on settings."
   fi
 else
-  echo "WARNING: No OPENAI_API_KEY set. Configure it in the add-on settings."
-  sleep 5
+  echo "No saved login. Choose a sign-in method when Codex starts."
+  echo "Your login will be saved for future add-on starts."
 fi
 
 echo ""
@@ -99,6 +104,7 @@ while true; do
   codex_args=(
     # HA containers can prevent the daemon from reading its process start time.
     --no-daemon
+    "${auth_args[@]}"
     --sandbox workspace-write
     --ask-for-approval on-request
     -c "approvals_reviewer=\"${approvals_reviewer}\""

@@ -6,7 +6,7 @@ Add-on format follows Home Assistant's developer docs: [Developing an add-on](ht
 
 ### Configuration
 
-- **openai_api_key** (required): Your OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-keys).
+- **openai_api_key** (optional): Your OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-keys), used when no saved login exists. Leave empty to sign in with ChatGPT.
 - **model** (optional): Override the default model (e.g., `gpt-5.1-codex-mini`, `gpt-5.2-codex`).
 - **resume_last_session** (optional, default `false`): Resume your most recent Codex session on startup.
 - **font_size** (optional, default `18`): Terminal font size (range: 10–40).
@@ -27,13 +27,13 @@ See the [OpenAI sandbox documentation](https://learn.chatgpt.com/docs/sandboxing
 
 ### Usage
 
-1. Configure your OpenAI API key in the add-on settings.
+1. Leave `openai_api_key` empty for ChatGPT sign-in, or configure an API key in the add-on settings.
 2. Start the add-on.
 3. Open the add-on UI (via Ingress in the sidebar).
 
 The terminal automatically:
 
-- Logs in using your API key
+- Reuses your saved Codex login, or logs in using your configured API key if no saved login exists. With neither, Codex prompts you to choose a sign-in method.
 - Refreshes the managed `AGENTS.md` in the working directory from the bundled template, preserving personal instructions separately
 - Starts Codex with the **workspace-write sandbox** and your approval review and internet access settings
 - Restarts the session when Codex exits (type `!exit` to quit)
@@ -69,6 +69,16 @@ Codex's native `AGENTS.override.md` replaces `AGENTS.md` in the same directory. 
 - When **resume_last_session** is enabled, Codex picks up where you left off instead of starting a new session.
 - Session data is stored persistently across container restarts in the add-on's data directory.
 - Sessions may contain conversation history including prompts and generated code. Keep this in mind if you share backups of your Home Assistant instance.
+
+### Persistent Authentication
+
+Codex stores its credentials and configuration under `/data/.codex` (`CODEX_HOME`), in the add-on's persistent data directory. Your last login method (ChatGPT or API key) survives add-on restarts and updates. Existing session history remains under `/data/.codex-sessions`.
+
+After installing this fix, sign in once if the previous container's credentials were already lost. For ChatGPT sign-in in Home Assistant, choose **Sign in with Device Code** in the login screen. Device code login must be enabled in your ChatGPT account or workspace settings. See [OpenAI authentication documentation](https://learn.chatgpt.com/docs/auth).
+
+To switch accounts or login methods, use `/logout` in Codex, then sign in again. To switch to a different configured API key, log out and reopen the add-on terminal. A configured key does not overwrite an existing saved login.
+
+Persistence does not prevent reauthentication if credentials are revoked or expire beyond recovery. Add-on backups include credentials; treat them as sensitive. Uninstalling the add-on or deleting its data removes the saved login.
 
 ### API Usage & Costs
 

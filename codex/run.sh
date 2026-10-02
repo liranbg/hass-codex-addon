@@ -16,10 +16,25 @@ title="OpenAI Codex"
 
 bashio::log.info "Starting ttyd terminal for Codex on port ${port} (Ingress enabled)"
 
-# Persist Codex sessions across container restarts
+# Persist credentials, configuration, and Codex state across container recreation.
+export CODEX_HOME=/data/.codex
+# Migrate once, so logging out cannot resurrect a stale legacy credential.
+if [[ ! -d "${CODEX_HOME}" ]]; then
+  mkdir -p "${CODEX_HOME}"
+  for file in auth.json config.toml; do
+    if [[ -f "/root/.codex/${file}" ]]; then
+      cp "/root/.codex/${file}" "${CODEX_HOME}/${file}"
+    fi
+  done
+fi
+chmod 700 "${CODEX_HOME}"
+if [[ -f "${CODEX_HOME}/auth.json" ]]; then
+  chmod 600 "${CODEX_HOME}/auth.json"
+fi
+
+# Keep existing session history at its original persistent location.
 mkdir -p /data/.codex-sessions
-mkdir -p /root/.codex
-ln -sfn /data/.codex-sessions /root/.codex/sessions
+ln -sfn /data/.codex-sessions "${CODEX_HOME}/sessions"
 
 # Read configuration from Home Assistant Supervisor
 OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
@@ -27,7 +42,7 @@ CODEX_MODEL="$(bashio::config 'model')"
 FONT_SIZE="$(bashio::config 'font_size')"
 
 if [[ -z "${OPENAI_API_KEY}" ]]; then
-  bashio::log.warning "No OpenAI API key configured. Set it in the add-on settings."
+  bashio::log.info "No API key configured; Codex will reuse its saved login or prompt you to sign in."
 elif [[ ! "${OPENAI_API_KEY}" =~ ^sk- ]]; then
   bashio::log.warning "API key does not start with 'sk-'. Please verify your key."
 fi

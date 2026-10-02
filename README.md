@@ -38,10 +38,12 @@ repository installations use numbered releases.
 
 ### Configure
 
-1. Set `openai_api_key` in the add-on configuration (get one from [OpenAI Platform](https://platform.openai.com/api-keys)).
+1. Leave `openai_api_key` empty to sign in with ChatGPT, or set an API key from [OpenAI Platform](https://platform.openai.com/api-keys).
 2. Optionally set a `model`, `review_approvals` (`ask` or `approve`), and `allow_internet_access` (`false` or `true`).
 3. Start the add-on.
 4. Click **Open Web UI** or find it in the sidebar.
+
+Your last Codex login method is saved in the add-on's persistent data directory and reused across restarts and updates. With ChatGPT, choose **Sign in with Device Code** on first launch. See [`codex/DOCS.md`](codex/DOCS.md) for authentication details.
 
 ### Usage
 

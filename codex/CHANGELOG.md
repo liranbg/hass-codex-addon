@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Persist Codex authentication and configuration in the add-on data directory; reuse the last login method across restarts and updates.
+
 ## 0.1.3
 
 - Replace the bundled playbook with verified Home Assistant editing, validation, and runtime safety guidelines; inspect installation-specific includes and storage settings.

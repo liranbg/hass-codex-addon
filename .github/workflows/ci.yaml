@@ -53,7 +53,9 @@ jobs:
             BUILD_ARCH=amd64
 
       - name: Run tests
-        run: bash tests/test_resume_session.sh hass-codex-addon:dev
+        run: |
+          bash tests/test_resume_session.sh hass-codex-addon:dev
+          bash tests/test_authentication.sh hass-codex-addon:dev
 
   build:
     runs-on: ${{ matrix.runner }}
