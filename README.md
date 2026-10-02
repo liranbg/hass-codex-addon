@@ -40,8 +40,17 @@ repository installations use numbered releases.
 
 1. Leave `openai_api_key` empty to sign in with ChatGPT, or set an API key from [OpenAI Platform](https://platform.openai.com/api-keys).
 2. Optionally set a `model`, `review_approvals` (`ask` or `approve`), and `allow_internet_access` (`false` or `true`).
-3. Start the add-on.
-4. Click **Open Web UI** or find it in the sidebar.
+3. Optionally configure plugin presets, such as the [Home Assistant skills](https://github.com/homeassistant-ai/skills) marketplace. Codex handles installation, skills, and bundled MCP definitions. Branches refresh on add-on restart; a full commit SHA pins the marketplace revision. See [`codex/DOCS.md`](codex/DOCS.md) for selection, updates, and MCP setup.
+4. Start the add-on.
+5. Click **Open Web UI** or find it in the sidebar.
+
+```yaml
+plugin_presets:
+  - repository: https://github.com/homeassistant-ai/skills
+    ref: main
+```
+
+Use `/plugins`, `/skills`, and `/mcp` inside Codex to inspect installation and finish any required connection setup. Omit `ref` to follow the repository's default branch.
 
 Your last Codex login method is saved in the add-on's persistent data directory and reused across restarts and updates. With ChatGPT, choose **Sign in with Device Code** on first launch. See [`codex/DOCS.md`](codex/DOCS.md) for authentication details.
 

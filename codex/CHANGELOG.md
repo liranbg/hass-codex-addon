@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Add plugin_presets for public GitHub marketplaces; Codex handles cloning, plugin installation, skills, and bundled MCP registration.
+- Refresh branches and tags on add-on restart, support full commit pins, and retain cached plugins when updates fail.
+- Preserve manually installed plugins and standalone MCP connections when removing presets; persist MCP OAuth logins across restarts.
+
 ## 0.1.4
 
 - Persist Codex authentication and configuration in the add-on data directory; reuse the last login method across restarts and updates.

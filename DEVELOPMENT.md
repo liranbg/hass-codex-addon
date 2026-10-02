@@ -15,6 +15,7 @@ Assumption: commands are run from the **repository root** unless stated otherwis
 - **Runtime entrypoint in HA**: [`codex/run.sh`](codex/run.sh)
   - Uses `bashio` to read add-on config (available **only** under the HA Supervisor environment)
   - Exports `OPENAI_API_KEY` and `CODEX_MODEL` environment variables
+  - Applies plugin presets through [`codex/manage-plugins.py`](codex/manage-plugins.py) before opening the terminal
   - Starts `ttyd` on **port 8000**, which spawns [`codex/codex.sh`](codex/codex.sh)
 - **Codex wrapper script**: [`codex/codex.sh`](codex/codex.sh)
   - Authenticates with OpenAI using `OPENAI_API_KEY`
@@ -155,9 +156,31 @@ The `docker run` command mounts this directory to `/data`, making the config ava
 | `openai_api_key` | Yes      | `OPENAI_API_KEY` | Your OpenAI API key                                                   |
 | `model`          | No       | `CODEX_MODEL`    | Model override (e.g., `gpt-5.1-codex-mini`). Empty uses Codex default                 |
 | `review_approvals` | No | `CODEX_REVIEW_APPROVALS` | `approve` (default) uses automatic review; `ask` uses user review |
+| `plugin_presets` | No | — | List of public GitHub marketplaces with `repository`, optional `ref`, and optional `plugin`; moving refs refresh before ttyd starts; defaults to `[]` |
 | `allow_internet_access` | No | `CODEX_ALLOW_INTERNET_ACCESS` | Allow sandbox command networking; defaults to `true` |
 
 ---
+
+## Plugin preset adapter
+
+[`codex/manage-plugins.py`](codex/manage-plugins.py) is a startup adapter around the bundled Codex CLI's native plugin manager. It reads `plugin_presets` from `/data/options.json`, validates and groups entries by repository, and invokes `codex plugin marketplace add`, `marketplace upgrade`, `list`, `add`, and `remove` with JSON output. Codex performs all Git operations, manifest validation, cache updates, skill discovery, and bundled MCP registration. The adapter does not implement a separate skill registry or run a model session.
+
+`/data/.codex/addon-plugin-presets.json` records each source's marketplace/ref and whether the adapter originally installed each plugin. It is saved atomically after successful installs. This ownership record prevents removing plugins the user already had. Removing a preset leaves its marketplace registered for browsing and unrelated installs.
+
+Native `marketplace add --ref` selects the initial reference. The bundled CLI has no command to change an existing marketplace's reference, so `set_ref()` changes only that marketplace's `ref` in Codex's `config.toml`, preserving other settings and file permissions. It then calls native `marketplace upgrade`; a failure restores the prior config. Moving refs refresh on every add-on start; full 40-character commit pins skip that refresh. Per-marketplace failures are logged and leave cached plugins available while other presets continue. Each native command has a timeout and disables Git prompts so startup cannot wait for interactive credentials.
+
+The container stores Codex state under `/data/.codex`, and the interactive wrapper selects file storage for MCP OAuth credentials. Plugin MCP definitions still need any server-specific authentication or runtime dependencies. The add-on does not supply them.
+
+Run unit checks and native lifecycle tests after building the image:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py'
+ruff format codex/manage-plugins.py tests/test_plugins.py tests/plugin_container.py tests/test_authentication.py tests/test_permissions.py
+ruff check codex/manage-plugins.py tests/test_plugins.py tests/plugin_container.py tests/test_authentication.py tests/test_permissions.py
+bash tests/test_plugin_presets.sh hass-codex-addon:dev
+```
+
+The container test uses local Git fixtures through the real Codex CLI and actual startup script. It verifies plugin and MCP registration, skill discovery, branch updates without version bumps, commit pins, failed-reference rollback, and removal without losing manual plugins or MCP settings. It makes no OpenAI requests or external downloads.
 
 ## Architecture overview
 

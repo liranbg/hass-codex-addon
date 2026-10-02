@@ -23,7 +23,9 @@ class AuthenticationTests(unittest.TestCase):
         self.sessions.mkdir()
         (self.sessions / "existing-session.jsonl").write_text("history\n")
         self.auth = self.persistent / "auth.json"
-        self.stub("codex", f'''#!{sys.executable}
+        self.stub(
+            "codex",
+            f"""#!{sys.executable}
 import json, os, pathlib, sys
 args = sys.argv[1:]
 assert args[:2] == ['-c', 'cli_auth_credentials_store="file"'], args
@@ -37,28 +39,37 @@ if args == ['login', '--with-api-key']:
     print('NEW_LOGIN')
     sys.exit(0)
 raise AssertionError(args)
-''')
+""",
+        )
         self.stub("ttyd", '#!/bin/sh\nprintf "HOME:%s\\n" "$CODEX_HOME"\n')
-        source = (ROOT / "codex/run.sh").read_text()
+        source = (
+            (ROOT / "codex/run.sh")
+            .read_text()
+            .replace("/manage-plugins.py", str(ROOT / "codex/manage-plugins.py"))
+        )
+        source = source.replace("/data/options.json", str(self.work / "options.json"))
         source = source.replace("/data/.codex-sessions", str(self.sessions))
         source = source.replace("/data/.codex", str(self.persistent))
         source = source.replace("/root/.codex", str(self.legacy))
         self.startup = self.work / "run.sh"
         self.startup.write_text(source)
         self.functions = self.work / "bashio.sh"
-        self.functions.write_text('''bashio::log.info() { :; }
+        self.functions.write_text("""bashio::log.info() { :; }
 bashio::log.warning() { :; }
 bashio::config() { :; }
-''')
-        self.env['CODEX_HOME'] = str(self.persistent)
+""")
+        self.env["CODEX_HOME"] = str(self.persistent)
 
     def start_container(self):
         result = subprocess.run(
-            ['bash', str(self.startup)], text=True, capture_output=True,
-            env=dict(self.env, BASH_ENV=str(self.functions)), timeout=10,
+            ["bash", str(self.startup)],
+            text=True,
+            capture_output=True,
+            env=dict(self.env, BASH_ENV=str(self.functions)),
+            timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(f'HOME:{self.persistent}', result.stdout)
+        self.assertIn(f"HOME:{self.persistent}", result.stdout)
 
     def test_chatgpt_login_survives_recreation_without_api_key_overwrite(self):
         self.start_container()
@@ -67,47 +78,50 @@ bashio::config() { :; }
         self.auth.write_text(credential)
         # The replacement container has no credentials in its legacy home.
         self.start_container()
-        result = self.launch(OPENAI_API_KEY='sk-test')
+        result = self.launch(OPENAI_API_KEY="sk-test")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('Reusing saved Codex login.', result.stdout)
-        self.assertNotIn('NEW_LOGIN', result.stdout)
+        self.assertIn("Reusing saved Codex login.", result.stdout)
+        self.assertNotIn("NEW_LOGIN", result.stdout)
         self.assertEqual(self.auth.read_text(), credential)
         self.assertEqual(self.auth.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.persistent.stat().st_mode & 0o777, 0o700)
-        self.assertEqual((self.persistent / 'sessions' / 'existing-session.jsonl')
-                         .read_text(), 'history\n')
+        self.assertEqual(
+            (self.persistent / "sessions" / "existing-session.jsonl").read_text(),
+            "history\n",
+        )
 
     def test_api_key_bootstrap_is_cached_for_future_starts(self):
         self.start_container()
-        first = self.launch(OPENAI_API_KEY='sk-test')
+        first = self.launch(OPENAI_API_KEY="sk-test")
         self.assertEqual(first.returncode, 0, first.stderr)
-        self.assertIn('NEW_LOGIN', first.stdout)
-        self.assertEqual(json.loads(self.auth.read_text())['auth_mode'], 'apikey')
+        self.assertIn("NEW_LOGIN", first.stdout)
+        self.assertEqual(json.loads(self.auth.read_text())["auth_mode"], "apikey")
         self.start_container()
         second = self.launch()
         self.assertEqual(second.returncode, 0, second.stderr)
-        self.assertIn('Reusing saved Codex login.', second.stdout)
-        self.assertNotIn('NEW_LOGIN', second.stdout)
+        self.assertIn("Reusing saved Codex login.", second.stdout)
+        self.assertNotIn("NEW_LOGIN", second.stdout)
 
     def test_first_start_without_credentials_offers_interactive_sign_in(self):
         self.start_container()
         result = self.launch()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('Choose a sign-in method', result.stdout)
-        self.assertIn('ARGS:', result.stdout)
+        self.assertIn("Choose a sign-in method", result.stdout)
+        self.assertIn("ARGS:", result.stdout)
         self.assertFalse(self.auth.exists())
 
     def test_legacy_migration_does_not_restore_credentials_after_logout(self):
-        (self.legacy / 'auth.json').write_text('{"auth_mode":"chatgpt"}')
-        (self.legacy / 'config.toml').write_text('model = "test-model"\n')
+        (self.legacy / "auth.json").write_text('{"auth_mode":"chatgpt"}')
+        (self.legacy / "config.toml").write_text('model = "test-model"\n')
         self.start_container()
         self.assertEqual(self.auth.read_text(), '{"auth_mode":"chatgpt"}')
-        self.assertEqual((self.persistent / 'config.toml').read_text(),
-                         'model = "test-model"\n')
+        self.assertEqual(
+            (self.persistent / "config.toml").read_text(), 'model = "test-model"\n'
+        )
         self.auth.unlink()  # Simulate logout.
         self.start_container()
         self.assertFalse(self.auth.exists())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

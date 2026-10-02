@@ -68,6 +68,9 @@ export CODEX_WORKING_DIR="${CODEX_WORKING_DIR:-/config}"
 export CODEX_REVIEW_APPROVALS="${CODEX_REVIEW_APPROVALS:-approve}"
 export CODEX_ALLOW_INTERNET_ACCESS="${CODEX_ALLOW_INTERNET_ACCESS:-true}"
 
+# Apply preset preferences once per start; Codex manages plugin installation.
+python3 /manage-plugins.py /data/options.json
+
 ttyd \
   --interface 0.0.0.0 \
   --port "${TTYD_PORT}" \
