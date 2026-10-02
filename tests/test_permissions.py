@@ -59,6 +59,7 @@ class PermissionsTests(unittest.TestCase):
                         args = json.loads(line[5:])
                         expected = [
                             "--no-daemon",
+                            "-c", 'cli_auth_credentials_store="file"',
                             "--sandbox", "workspace-write",
                             "--ask-for-approval", "on-request",
                             "-c", f'approvals_reviewer="{reviewer}"',
@@ -88,6 +89,7 @@ class PermissionsTests(unittest.TestCase):
         source = (ROOT / "codex/run.sh").read_text()
         # Isolate paths under the test directory; leave config/export code intact.
         source = source.replace("/data/.codex-sessions", str(self.work / "sessions"))
+        source = source.replace("/data/.codex", str(self.work / "persistent"))
         source = source.replace("/root/.codex", str(self.work / "home"))
         startup = self.work / "run.sh"
         startup.write_text(source)

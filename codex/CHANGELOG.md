@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Persist Codex authentication and configuration in the add-on data directory; reuse the last login method across restarts and updates.
+
 ## 0.1.2
 
 - Update Codex CLI from 0.159.2 to 0.160.0.
