@@ -49,7 +49,7 @@ RUN chmod +x /usr/local/bin/ha && ha --help
 
 WORKDIR /config
 
-COPY run.sh codex.sh AGENTS.tmpl.md /
+COPY run.sh codex.sh manage-plugins.py AGENTS.tmpl.md /
 
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD ["curl", "-f", "http://localhost:8000/"]

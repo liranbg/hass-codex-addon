@@ -15,6 +15,7 @@ Assumption: commands are run from the **repository root** unless stated otherwis
 - **Runtime entrypoint in HA**: [`codex/run.sh`](codex/run.sh)
   - Uses `bashio` to read add-on config (available **only** under the HA Supervisor environment)
   - Exports `OPENAI_API_KEY` and `CODEX_MODEL` environment variables
+  - Applies plugin presets through [`codex/manage-plugins.py`](codex/manage-plugins.py) before opening the terminal
   - Starts `ttyd` on **port 8000**, which spawns [`codex/codex.sh`](codex/codex.sh)
 - **Codex wrapper script**: [`codex/codex.sh`](codex/codex.sh)
   - Authenticates with OpenAI using `OPENAI_API_KEY`
@@ -155,9 +156,35 @@ The `docker run` command mounts this directory to `/data`, making the config ava
 | `openai_api_key` | Yes      | `OPENAI_API_KEY` | Your OpenAI API key                                                   |
 | `model`          | No       | `CODEX_MODEL`    | Model override (e.g., `gpt-5.1-codex-mini`). Empty uses Codex default                 |
 | `review_approvals` | No | `CODEX_REVIEW_APPROVALS` | `approve` (default) uses automatic review; `ask` uses user review |
+| `plugin_presets` | No | — | List of public GitHub marketplaces with `repository`, optional `ref`, and optional `plugin`; moving refs refresh before ttyd starts; defaults to `[]` |
 | `allow_internet_access` | No | `CODEX_ALLOW_INTERNET_ACCESS` | Allow sandbox command networking; defaults to `true` |
 
 ---
+
+## Plugin preset adapter
+
+[`codex/manage-plugins.py`](codex/manage-plugins.py) is a startup adapter around the bundled Codex CLI's native plugin manager. It reads `plugin_presets` from `/data/options.json`, validates and groups entries by repository, and invokes `codex plugin marketplace add`, `marketplace upgrade`, `list`, `add`, and `remove` with JSON output. Codex performs all Git operations, manifest validation, cache updates, skill discovery, and bundled MCP registration. The adapter does not implement a separate skill registry or run a model session.
+
+`/data/.codex/addon-plugin-presets.json` records each source's marketplace/ref and whether the adapter originally installed each plugin. It is saved atomically after successful installs. This ownership record prevents removing plugins the user already had. Removing a preset leaves its marketplace registered for browsing and unrelated installs.
+
+Native `marketplace add --ref` selects the initial reference. Git's `check-ref-format` validates ref names. The bundled CLI has no command to change an existing marketplace's reference, so `set_ref()` changes only that marketplace's `ref` in Codex's `config.toml`, preserving other settings and file permissions. It then calls native `marketplace upgrade`; a failure restores the prior config. Moving refs refresh on every add-on start; full 40-character commit pins skip that refresh. Per-marketplace failures are logged and leave cached plugins available while other presets continue.
+
+`apply()` starts a shared 30-second deadline before validation. Every child command receives only the remaining budget, and Git prompts are disabled. Commands run in their own process groups; a timeout kills the group, including Codex and Git descendants, before configuration rollback. `StartupTimeout` stops reconciliation before removal of any unvisited presets, and the entrypoint logs a warning while continuing to ttyd. Successful installs have already saved their ownership state, so a timeout can be retried safely on the next start.
+
+`run.sh` runs the preset manager as a tracked child and waits for it before starting ttyd. SIGTERM/SIGINT interrupts that wait immediately, signals the child, waits for cleanup, and exits without opening the terminal. The manager terminates its active command group and rolls back a pending reference change when cancelled. Native global marketplace discovery can fail because of an unrelated broken manifest; the adapter then attempts each repository through scoped native add/list operations. Plugin selection matches Codex's ASCII, dot-separated name grammar, including names beginning with a hyphen.
+
+The container stores Codex state under `/data/.codex`, and the interactive wrapper selects file storage for MCP OAuth credentials. Plugin MCP definitions still need any server-specific authentication or runtime dependencies. The add-on does not supply them.
+
+Run unit checks and native lifecycle tests after building the image:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py'
+ruff format codex/manage-plugins.py tests/test_plugins.py tests/plugin_container.py tests/test_authentication.py tests/test_permissions.py
+ruff check codex/manage-plugins.py tests/test_plugins.py tests/plugin_container.py tests/test_authentication.py tests/test_permissions.py
+bash tests/test_plugin_presets.sh hass-codex-addon:dev
+```
+
+The container test uses local Git fixtures through the real Codex CLI and actual startup script. It verifies plugin and MCP registration, skill discovery, branch updates without version bumps, commit pins, failed-reference rollback, and removal without losing manual plugins or MCP settings. It also exercises hexadecimal and punctuation ref names, dotted and leading-hyphen plugin names, isolation of a broken unrelated marketplace, the shared startup deadline, and SIGTERM/SIGINT during a stalled Git operation. It makes no OpenAI requests or external downloads.
 
 ## Architecture overview
 

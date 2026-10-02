@@ -105,6 +105,8 @@ while true; do
     # HA containers can prevent the daemon from reading its process start time.
     --no-daemon
     "${auth_args[@]}"
+    # Keep MCP OAuth logins in persistent storage in this headless container.
+    -c 'mcp_oauth_credentials_store="file"'
     --sandbox workspace-write
     --ask-for-approval on-request
     -c "approvals_reviewer=\"${approvals_reviewer}\""

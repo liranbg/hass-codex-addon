@@ -12,6 +12,7 @@ Add-on format follows Home Assistant's developer docs: [Developing an add-on](ht
 - **font_size** (optional, default `18`): Terminal font size (range: 10–40).
 - **working_directory** (optional, default `/config`): The directory Codex operates in.
 - **review_approvals** (optional, default `approve`): `ask` shows approval requests to you. `approve` uses Codex's automatic reviewer for eligible requests; it can approve or reject them rather than approving everything.
+- **plugin_presets** (optional, default `[]`): Plugins to install from public GitHub marketplaces before Codex starts. Each entry has a `repository`, optional `ref`, and optional `plugin`. See Plugin presets below.
 - **allow_internet_access** (optional, default `true`): Allow outbound network access for commands inside the Codex sandbox. This setting does not disable the OpenAI connection needed to run Codex.
 
 For automatic review with internet access, set:
@@ -24,6 +25,70 @@ allow_internet_access: true
 Both review modes use `approval_policy = "on-request"` and the **`workspace-write` sandbox**. The add-on explicitly passes these settings to each new or resumed Codex session. Restart the add-on after changing the options.
 
 See the [OpenAI sandbox documentation](https://learn.chatgpt.com/docs/sandboxing) for approval and network behavior.
+
+### Plugin presets
+
+Add repositories in the add-on configuration, then restart the add-on:
+
+```yaml
+plugin_presets:
+  - repository: https://github.com/homeassistant-ai/skills
+```
+
+Open the terminal and use `/plugins` to inspect the installed plugin and `/skills` to see its skills. The [Home Assistant marketplace](https://github.com/homeassistant-ai/skills) contains a single plugin, so its name is selected automatically. If a marketplace contains several plugins, set `plugin` to the name you want; the add-on logs the available names when it cannot select one. Repeat an entry with another plugin name to select several from the same marketplace.
+
+Codex's native plugin manager clones the marketplace, installs the selected plugins, discovers their skills, and registers bundled MCP server definitions. The add-on only applies your preset preferences at startup. No OpenAI login or model request is needed for installation. Codex stores marketplaces, plugins, settings, and credentials under persistent `/data/.codex`; restarting or upgrading the add-on preserves them. See [Codex plugins](https://learn.chatgpt.com/docs/plugins).
+
+Presets require a Codex-compatible marketplace manifest, such as `.agents/plugins/marketplace.json` or the supported `.claude-plugin/marketplace.json` layout used by the Home Assistant repository. A plain repository containing only `SKILL.md` files is not a plugin marketplace; install those skills separately through Codex's skill installer.
+
+#### References and updates
+
+Set `ref` to a branch, tag, or full commit SHA. Omit it to follow the repository's default branch:
+
+```yaml
+plugin_presets:
+  - repository: https://github.com/homeassistant-ai/skills
+    ref: main
+    plugin: home-assistant-skills
+```
+
+For a development branch, use a value such as `ref: feature/ha`. For a tag, use `ref: v1.0.0`. For a commit pin, copy the full 40-character SHA from GitHub into `ref`. Shorter hexadecimal values such as `deadbeef` are treated as moving branch or tag names, not commit pins; use the full SHA to pin a commit. All plugins from the same marketplace share one reference, so do not configure that repository at multiple refs.
+
+References follow Git's naming rules, including names such as `release+candidate` and `feature@beta`.
+
+| Configuration | On each add-on restart |
+| --- | --- |
+| No `ref` (or `HEAD`) | Check the latest default-branch revision |
+| Branch | Check the latest revision of that branch |
+| Tag | Check the revision the tag currently points to; a moved tag is updated |
+| Full commit SHA | Keep the pinned marketplace revision; skip marketplace refresh after installation |
+
+On each add-on start, the adapter asks Codex to refresh moving references and reinstall the selected plugin bundles when necessary, including content changes without a plugin version bump. Codex validates a staged marketplace before replacing its cached copy. A failed refresh logs a warning and retains installed plugins; the terminal still opens and the refresh retries on the next start. Changing a configured reference also uses the native updater; if it fails, the previous reference setting is restored.
+
+Preset setup has a shared 30-second startup budget across all repositories and commands. If it runs out, the add-on stops the current download, skips the remaining preset changes and removals, and opens the terminal with cached plugins. Completed installations are saved; unfinished work retries on the next add-on start. Several slow repositories cannot each add another full timeout to startup.
+
+Restart the **add-on** to apply preset changes and fetch updates. Opening the terminal or restarting only a Codex session does not run this startup refresh. To change a pin, replace its SHA and restart the add-on. Plugins can also be managed through Codex's `/plugins` interface. Preset configuration is reapplied at the next add-on start, so remove a preset from configuration if you want to uninstall it permanently.
+
+To refresh the Home Assistant plugin from an existing Codex session, ask Codex to refresh its marketplace and reinstall the plugin, or run these native commands from a shell:
+
+```bash
+codex plugin marketplace upgrade home-assistant-skills
+codex plugin add home-assistant-skills@home-assistant-skills
+```
+
+The first command updates the marketplace at its configured ref; the second refreshes the installed bundle. A pinned ref stays pinned.
+
+A commit pin fixes the marketplace revision. If a marketplace points to plugins in separate repositories, their own source references control their versions. MCP executables, package dependencies, and remote services also have their own update lifecycle.
+
+Removing a preset uninstalls a plugin only if the add-on originally installed it. A plugin that was already installed manually is kept. Registered marketplaces remain available in `/plugins`, and unrelated plugins, standalone skills, and standalone MCP connections are preserved.
+
+Downloads and moving-reference refreshes require internet access regardless of `allow_internet_access`, which controls commands inside Codex sessions. Cached plugin content remains available offline. Only add repositories whose instructions and tools you trust. Presets accept public GitHub repository URLs (with an optional `.git` suffix); use `ref` instead of a GitHub `/tree/…` or `/commit/…` page URL.
+
+#### MCP connections
+
+Installing a plugin registers any MCP server definitions it bundles. A server may still require a URL, credentials, OAuth sign-in, or runtime dependencies. Open `/mcp` to inspect connection status and complete setup; installation alone does not grant access to an external service. The add-on does not invent credentials or run repository setup scripts.
+
+For a standalone MCP server, ask Codex to configure it or use the native `codex mcp add` command. Those settings persist independently of presets. MCP OAuth credentials created inside the interactive Codex session are saved to files under persistent `CODEX_HOME`, so ordinary restarts retain the login. Providers can still require reauthentication when credentials expire or are revoked. See [Codex MCP setup](https://learn.chatgpt.com/docs/extend/mcp).
 
 ### Usage
 

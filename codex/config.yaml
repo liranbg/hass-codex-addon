@@ -45,6 +45,7 @@ options:
   working_directory: "/config"
   review_approvals: approve
   allow_internet_access: true
+  plugin_presets: []
 
 schema:
   openai_api_key: password
@@ -54,6 +55,10 @@ schema:
   working_directory: str?
   review_approvals: "list(ask|approve)?"
   allow_internet_access: bool?
+  plugin_presets:
+    - repository: str
+      ref: str?
+      plugin: str?
 
 backup_exclude:
   - "*.log"
