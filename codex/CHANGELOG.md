@@ -2,6 +2,7 @@
 
 ## 0.2.0
 
+- Restore Home Assistant update discovery after repository rules blocked release metadata publication; automatically publish future metadata updates after image publication and checks on the metadata commit.
 - Add plugin_presets for public GitHub marketplaces; Codex handles cloning, plugin installation, skills, and bundled MCP registration.
 - Refresh branches and tags on add-on restart, support full commit pins, and retain cached plugins when updates fail.
 - Preserve manually installed plugins and standalone MCP connections when removing presets; persist MCP OAuth logins across restarts.

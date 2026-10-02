@@ -107,9 +107,11 @@ jobs:
 
   announce:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: [prepare, build-and-push]
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -135,7 +137,8 @@ jobs:
               --title "$VERSION" --notes-file /tmp/release-notes.md
           fi
 
-      - name: Advertise the published images to Home Assistant
+      - name: Stage Home Assistant metadata for checks
+        id: publication
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
@@ -144,4 +147,46 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add codex/config.yaml
           git commit -m "release: advertise add-on $VERSION"
-          git push origin HEAD:main
+          branch="auto/publish-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Run CI on the exact publication commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.publication.outputs.branch }}
+          PUBLICATION_SHA: ${{ steps.publication.outputs.sha }}
+        run: |
+          # Explicit dispatch starts CI even though GITHUB_TOKEN pushed the branch.
+          gh workflow run ci.yaml --ref "$BRANCH"
+          run_id=""
+          for _attempt in $(seq 1 60); do
+            run_id=$(gh run list --workflow ci.yaml --event workflow_dispatch \
+              --branch "$BRANCH" --limit 20 --json databaseId,headSha \
+              --jq ".[] | select(.headSha == \"$PUBLICATION_SHA\") | .databaseId" | head -n 1)
+            if [ -n "$run_id" ]; then
+              break
+            fi
+            sleep 5
+          done
+          if [ -z "$run_id" ]; then
+            echo "CI dispatch did not produce a run for $PUBLICATION_SHA."
+            exit 1
+          fi
+          gh run watch "$run_id" --interval 10 --exit-status
+
+      - name: Publish checked metadata to Home Assistant
+        env:
+          PUBLICATION_SHA: ${{ steps.publication.outputs.sha }}
+          BRANCH: ${{ steps.publication.outputs.branch }}
+        run: |
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "main advanced during CI; refusing to advertise stale images."
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$PUBLICATION_SHA"
+          # A normal fast-forward push preserves the commit that passed CI.
+          git push origin "$PUBLICATION_SHA:refs/heads/main"
+          git push origin --delete "$BRANCH"
