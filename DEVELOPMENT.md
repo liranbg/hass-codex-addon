@@ -167,7 +167,9 @@ The `docker run` command mounts this directory to `/data`, making the config ava
 
 `/data/.codex/addon-plugin-presets.json` records each source's marketplace/ref and whether the adapter originally installed each plugin. It is saved atomically after successful installs. This ownership record prevents removing plugins the user already had. Removing a preset leaves its marketplace registered for browsing and unrelated installs.
 
-Native `marketplace add --ref` selects the initial reference. The bundled CLI has no command to change an existing marketplace's reference, so `set_ref()` changes only that marketplace's `ref` in Codex's `config.toml`, preserving other settings and file permissions. It then calls native `marketplace upgrade`; a failure restores the prior config. Moving refs refresh on every add-on start; full 40-character commit pins skip that refresh. Per-marketplace failures are logged and leave cached plugins available while other presets continue. Each native command has a timeout and disables Git prompts so startup cannot wait for interactive credentials.
+Native `marketplace add --ref` selects the initial reference. Git's `check-ref-format` validates ref names. The bundled CLI has no command to change an existing marketplace's reference, so `set_ref()` changes only that marketplace's `ref` in Codex's `config.toml`, preserving other settings and file permissions. It then calls native `marketplace upgrade`; a failure restores the prior config. Moving refs refresh on every add-on start; full 40-character commit pins skip that refresh. Per-marketplace failures are logged and leave cached plugins available while other presets continue.
+
+`apply()` starts a shared 30-second deadline before validation. Every child command receives only the remaining budget, and Git prompts are disabled. Commands run in their own process groups; a timeout kills the group, including Codex and Git descendants, before configuration rollback. `StartupTimeout` stops reconciliation before removal of any unvisited presets, and the entrypoint logs a warning while continuing to ttyd. Successful installs have already saved their ownership state, so a timeout can be retried safely on the next start.
 
 The container stores Codex state under `/data/.codex`, and the interactive wrapper selects file storage for MCP OAuth credentials. Plugin MCP definitions still need any server-specific authentication or runtime dependencies. The add-on does not supply them.
 
@@ -180,7 +182,7 @@ ruff check codex/manage-plugins.py tests/test_plugins.py tests/plugin_container.
 bash tests/test_plugin_presets.sh hass-codex-addon:dev
 ```
 
-The container test uses local Git fixtures through the real Codex CLI and actual startup script. It verifies plugin and MCP registration, skill discovery, branch updates without version bumps, commit pins, failed-reference rollback, and removal without losing manual plugins or MCP settings. It makes no OpenAI requests or external downloads.
+The container test uses local Git fixtures through the real Codex CLI and actual startup script. It verifies plugin and MCP registration, skill discovery, branch updates without version bumps, commit pins, failed-reference rollback, and removal without losing manual plugins or MCP settings. It also exercises hexadecimal and punctuation ref names, then stalls a Git operation to verify the shared startup deadline opens the terminal and preserves cached state. It makes no OpenAI requests or external downloads.
 
 ## Architecture overview
 

@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 HOME = Path("/data/.codex")
@@ -239,3 +240,37 @@ command("git", "-C", str(REPO), "tag", "-f", "cafe123", third)
 start([hex_tag])
 assert "third revision" in skill.read_text()
 print("PASS: hexadecimal tag names are accepted and refresh when the tag moves")
+
+for ref in ("release+candidate", "feature@beta"):
+    command("git", "-C", str(REPO), "branch", ref, first)
+    selected = dict(entry, ref=ref)
+    start([selected])
+    assert "first revision" in skill.read_text()
+    command("git", "-C", str(REPO), "branch", "-f", ref, third)
+    start([selected])
+    assert "third revision" in skill.read_text()
+print("PASS: Git-valid punctuation in ref names installs and refreshes correctly")
+
+# Stall remote Git operations beyond the shared startup budget. The startup
+# script must still open the terminal and preserve the previous configuration.
+git_wrapper = bin_dir / "git"
+git_wrapper.write_text(
+    git_wrapper.read_text().replace(
+        'exec /usr/bin/git "${args[@]}"',
+        'if [[ "$*" == *ls-remote* ]]; then sleep 120; fi\nexec /usr/bin/git "${args[@]}"',
+    )
+)
+before = (HOME / "config.toml").read_text()
+ownership = (HOME / "addon-plugin-presets.json").read_text()
+Path("/data/git-calls.log").write_text("")
+started = time.monotonic()
+output = start(
+    [entry, dict(repository="https://github.com/example/another", plugin="sample")]
+)
+assert time.monotonic() - started < 35
+assert "startup deadline" in output, output
+assert (HOME / "config.toml").read_text() == before
+assert (HOME / "addon-plugin-presets.json").read_text() == ownership
+assert "third revision" in skill.read_text()
+assert Path("/data/git-calls.log").read_text().count("ls-remote") == 1
+print("PASS: a shared startup deadline opens the terminal and preserves cached plugins")

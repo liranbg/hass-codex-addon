@@ -3,7 +3,9 @@
 import importlib.util
 import json
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -37,7 +39,7 @@ class PluginTests(unittest.TestCase):
         self.mock.start()
         self.addCleanup(self.mock.stop)
 
-    def native(self, *args):
+    def native(self, *args, **kwargs):
         self.calls.append(args)
         if args == ("marketplace", "list"):
             return {
@@ -113,6 +115,23 @@ class PluginTests(unittest.TestCase):
                 self.assertEqual(self.state()["sources"][URL + ".git"]["ref"], ref)
                 self.assertEqual(self.installed, {"example@fixture"})
 
+    def test_git_ref_grammar_accepts_punctuation_and_rejects_invalid_refs(self):
+        for ref in ("release+candidate", "feature@beta", "rélease", "refs/tags/v1"):
+            with self.subTest(ref=ref):
+                groups = plugins.presets([dict(repository=URL, ref=ref)])
+                self.assertEqual(groups[URL + ".git"]["ref"], ref)
+        for ref in (
+            ".hidden",
+            "foo//bar",
+            "name.lock",
+            "foo@{bar",
+            "-option",
+            "a\0b",
+            "@",
+        ):
+            with self.subTest(ref=ref), self.assertRaises(plugins.PresetError):
+                plugins.presets([dict(repository=URL, ref=ref)])
+
     def test_multiple_plugins_need_explicit_selection(self):
         self.available = ["example", "another"]
         plugins.apply([self.entry()], self.home)
@@ -164,7 +183,7 @@ class PluginTests(unittest.TestCase):
     def test_offline_refresh_keeps_and_reapplies_cached_plugin(self):
         plugins.apply([self.entry()], self.home)
 
-        def offline(*args):
+        def offline(*args, **kwargs):
             if args[:2] == ("marketplace", "upgrade"):
                 raise plugins.PresetError("offline")
             return self.native(*args)
@@ -177,7 +196,7 @@ class PluginTests(unittest.TestCase):
         plugins.apply([self.entry()], self.home)
         before = self.config.read_text()
 
-        def offline(*args):
+        def offline(*args, **kwargs):
             if args[:2] == ("marketplace", "upgrade"):
                 self.assertIn('ref = "' + SHA + '"', self.config.read_text())
                 raise plugins.PresetError("bad ref")
@@ -196,7 +215,7 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(self.state()["sources"][URL + ".git"]["ref"], SHA)
 
     def test_failed_install_does_not_block_another_source(self):
-        def failing(*args):
+        def failing(*args, **kwargs):
             if args[:2] == ("marketplace", "add") and "broken" in args[2]:
                 raise subprocess.TimeoutExpired("codex", 180)
             return self.native(*args)
@@ -211,7 +230,7 @@ class PluginTests(unittest.TestCase):
     def test_failed_remove_is_retried(self):
         plugins.apply([self.entry()], self.home)
 
-        def failing(*args):
+        def failing(*args, **kwargs):
             if args[0] == "remove":
                 raise plugins.PresetError("retry")
             return self.native(*args)
@@ -236,11 +255,68 @@ class PluginTests(unittest.TestCase):
 
     def test_native_upgrade_errors_are_not_silently_treated_as_success(self):
         self.mock.stop()
-        with patch.object(plugins.subprocess, "run") as run:
-            run.return_value.stdout = '{"errors":[{"message":"failed"}]}'
+        with patch.object(plugins, "command") as run:
+            run.return_value = subprocess.CompletedProcess(
+                [], 0, '{"errors":[{"message":"failed"}]}'
+            )
             with self.assertRaises(plugins.PresetError):
                 plugins.codex("marketplace", "upgrade", "fixture")
-            self.assertEqual(run.call_args.kwargs["stdin"], subprocess.DEVNULL)
+
+    def test_deadline_bounds_cumulative_commands_and_preserves_ownership(self):
+        plugins.apply([self.entry()], self.home)
+        before = (self.home / "addon-plugin-presets.json").read_text()
+        self.calls.clear()
+        self.mock.stop()
+        original = plugins.command
+
+        def slow(args, deadline=None, limit=180):
+            if args[0] == "git":
+                return original(args, deadline, limit)
+            response = json.dumps(self.native(*args[2:-1]))
+            return original(
+                [
+                    sys.executable,
+                    "-c",
+                    f"import time; time.sleep(.2); print({response!r})",
+                ],
+                deadline,
+                limit,
+            )
+
+        started = time.monotonic()
+        with (
+            patch.object(plugins, "STARTUP_TIMEOUT", 0.5),
+            patch.object(plugins, "command", side_effect=slow),
+            self.assertRaises(plugins.StartupTimeout),
+        ):
+            plugins.apply(
+                [self.entry(), dict(repository="https://github.com/example/another")],
+                self.home,
+            )
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertGreaterEqual(len(self.calls), 2)
+        self.assertFalse(any(call[0] == "remove" for call in self.calls))
+        self.assertEqual((self.home / "addon-plugin-presets.json").read_text(), before)
+
+    def test_timeout_terminates_child_processes(self):
+        marker = self.home / "late-child-write"
+        ready = self.home / "child-started"
+        child = [
+            sys.executable,
+            "-c",
+            f"import time; from pathlib import Path; time.sleep(.8); Path({str(marker)!r}).touch()",
+        ]
+        parent = (
+            "import subprocess, time; from pathlib import Path; "
+            f"subprocess.Popen({child!r}); Path({str(ready)!r}).touch(); time.sleep(60)"
+        )
+        with self.assertRaises(plugins.StartupTimeout):
+            plugins.command(
+                [sys.executable, "-c", parent], deadline=time.monotonic() + 0.4
+            )
+        self.assertTrue(ready.exists())
+        time.sleep(0.9)
+        self.assertFalse(marker.exists())
 
     def test_no_presets_make_no_native_calls(self):
         plugins.apply([], self.home)

@@ -6,17 +6,56 @@ refs at startup, and records which plugins it installed so removing a preset
 cannot uninstall plugins the user already had. It never runs an AI session.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+
+STARTUP_TIMEOUT = 30
 
 
 class PresetError(Exception):
     """A configuration or native CLI error safe to summarize in startup logs."""
+
+
+class StartupTimeout(PresetError):
+    """Stop reconciliation before cached plugins can be removed."""
+
+
+def command(args: list[str], deadline: float | None = None, limit: float = 180):
+    """Bound command time and terminate descendants when a download stalls."""
+    remaining = limit if deadline is None else min(limit, deadline - time.monotonic())
+    message = "preset setup reached its startup deadline; retrying next startup"
+    if remaining <= 0:
+        raise StartupTimeout(message)
+    with subprocess.Popen(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+        env=dict(os.environ, GIT_TERMINAL_PROMPT="0"),
+    ) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.communicate()
+            if deadline is not None and remaining < limit:
+                raise StartupTimeout(message) from None
+            raise
+        return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
 
 
 def write_atomic(path: Path, content: str) -> None:
@@ -36,17 +75,10 @@ def write_atomic(path: Path, content: str) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def codex(*args: str) -> dict:
+def codex(*args: str, deadline: float | None = None) -> dict:
     """Call the native CLI without a shell, login prompts, or credential output."""
-    result = subprocess.run(
-        ["codex", "plugin", *args, "--json"],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=180,
-        stdin=subprocess.DEVNULL,
-        env=dict(os.environ, GIT_TERMINAL_PROMPT="0"),
-    )
+    result = command(["codex", "plugin", *args, "--json"], deadline)
+    result.check_returncode()
     response = json.loads(result.stdout)
     # Marketplace upgrades report per-source failures with a successful exit.
     if response.get("errors"):
@@ -54,7 +86,7 @@ def codex(*args: str) -> dict:
     return response
 
 
-def presets(entries: list[dict]) -> dict[str, dict]:
+def presets(entries: list[dict], deadline: float | None = None) -> dict[str, dict]:
     """Group selected plugins by repository; a marketplace can have one ref."""
     if not isinstance(entries, list):
         raise PresetError("plugin_presets must be a list")
@@ -72,10 +104,11 @@ def presets(entries: list[dict]) -> dict[str, dict]:
         ref = entry.get("ref") or "HEAD"
         if (
             not isinstance(ref, str)
-            or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9._/-]*", ref)
-            or ".." in ref
-            or "//" in ref
-            or ref.endswith(("/", ".", ".lock"))
+            or ref.startswith("-")
+            or "\0" in ref
+            or command(
+                ["git", "check-ref-format", "--allow-onelevel", ref], deadline, 5
+            ).returncode
         ):
             raise PresetError("ref must be a branch, tag, or full 40-character SHA")
         if re.fullmatch(r"[a-fA-F0-9]{40}", ref):
@@ -124,7 +157,12 @@ def set_ref(config: Path, marketplace: str, ref: str) -> str:
 
 def apply(entries: list[dict], home: Path) -> None:
     """Reconcile startup presets, preserving manual installs and offline caches."""
-    groups = presets(entries)  # Reject malformed config before any removal.
+    deadline = time.monotonic() + STARTUP_TIMEOUT
+    groups = presets(entries, deadline)  # Reject malformed config before any removal.
+
+    def native(*args):
+        return codex(*args, deadline=deadline)
+
     state_path = home / "addon-plugin-presets.json"
     state = (
         json.loads(state_path.read_text())
@@ -152,7 +190,7 @@ def apply(entries: list[dict], home: Path) -> None:
     if not groups and not state["plugins"]:
         return
     wanted = set()
-    known = codex("marketplace", "list")["marketplaces"]
+    known = native("marketplace", "list")["marketplaces"]
     marketplace_roots = {entry["name"]: Path(entry["root"]) for entry in known}
     marketplace_sources = {
         info["source"].rstrip("/").removesuffix(".git") + ".git": entry["name"]
@@ -179,7 +217,7 @@ def apply(entries: list[dict], home: Path) -> None:
         }
         try:
             if name not in marketplace_roots or not marketplace_roots[name].exists():
-                added = codex("marketplace", "add", source, "--ref", ref)
+                added = native("marketplace", "add", source, "--ref", ref)
                 name = added["marketplaceName"]
                 saved = {"marketplace": name, "ref": ref}
                 state["sources"][source] = saved
@@ -189,7 +227,7 @@ def apply(entries: list[dict], home: Path) -> None:
                 previous = set_ref(config, name, ref)
                 if saved.get("ref") != ref or config.read_text() != previous:
                     try:
-                        codex("marketplace", "upgrade", name)
+                        native("marketplace", "upgrade", name)
                     except Exception:
                         write_atomic(config, previous)
                         raise
@@ -197,7 +235,9 @@ def apply(entries: list[dict], home: Path) -> None:
                     save()
                 elif not re.fullmatch(r"[a-f0-9]{40}", ref):
                     try:
-                        codex("marketplace", "upgrade", name)
+                        native("marketplace", "upgrade", name)
+                    except StartupTimeout:
+                        raise
                     except (
                         PresetError,
                         OSError,
@@ -209,7 +249,7 @@ def apply(entries: list[dict], home: Path) -> None:
                             flush=True,
                         )
 
-            listing = codex("list", "--marketplace", name, "--available")
+            listing = native("list", "--marketplace", name, "--available")
             available = {
                 plugin["name"]: plugin["pluginId"] for plugin in listing["available"]
             }
@@ -231,12 +271,14 @@ def apply(entries: list[dict], home: Path) -> None:
                 wanted.add(plugin_id)
                 # Native add also refreshes installed bundles when their files
                 # changed without a version bump, and registers bundled MCP.
-                codex("add", plugin_id)
+                native("add", plugin_id)
                 state["plugins"].setdefault(
                     plugin_id, {"source": source, "owned": plugin_id not in installed}
                 )
                 save()
                 print(f"Plugin preset ready: {plugin_id} ({ref}).", flush=True)
+        except StartupTimeout:
+            raise
         except (PresetError, OSError, ValueError, subprocess.SubprocessError) as error:
             wanted.update(retained)
             detail = (
@@ -252,7 +294,9 @@ def apply(entries: list[dict], home: Path) -> None:
             continue
         if info["owned"]:
             try:
-                codex("remove", plugin_id)
+                native("remove", plugin_id)
+            except StartupTimeout:
+                raise
             except (PresetError, OSError, ValueError, subprocess.SubprocessError):
                 print(
                     f"WARNING: Could not remove preset {plugin_id}; retrying next startup.",

@@ -54,6 +54,8 @@ plugin_presets:
 
 For a development branch, use a value such as `ref: feature/ha`. For a tag, use `ref: v1.0.0`. For a commit pin, copy the full 40-character SHA from GitHub into `ref`. Shorter hexadecimal values such as `deadbeef` are treated as moving branch or tag names, not commit pins; use the full SHA to pin a commit. All plugins from the same marketplace share one reference, so do not configure that repository at multiple refs.
 
+References follow Git's naming rules, including names such as `release+candidate` and `feature@beta`.
+
 | Configuration | On each add-on restart |
 | --- | --- |
 | No `ref` (or `HEAD`) | Check the latest default-branch revision |
@@ -62,6 +64,8 @@ For a development branch, use a value such as `ref: feature/ha`. For a tag, use 
 | Full commit SHA | Keep the pinned marketplace revision; skip marketplace refresh after installation |
 
 On each add-on start, the adapter asks Codex to refresh moving references and reinstall the selected plugin bundles when necessary, including content changes without a plugin version bump. Codex validates a staged marketplace before replacing its cached copy. A failed refresh logs a warning and retains installed plugins; the terminal still opens and the refresh retries on the next start. Changing a configured reference also uses the native updater; if it fails, the previous reference setting is restored.
+
+Preset setup has a shared 30-second startup budget across all repositories and commands. If it runs out, the add-on stops the current download, skips the remaining preset changes and removals, and opens the terminal with cached plugins. Completed installations are saved; unfinished work retries on the next add-on start. Several slow repositories cannot each add another full timeout to startup.
 
 Restart the **add-on** to apply preset changes and fetch updates. Opening the terminal or restarting only a Codex session does not run this startup refresh. To change a pin, replace its SHA and restart the add-on. Plugins can also be managed through Codex's `/plugins` interface. Preset configuration is reapplied at the next add-on start, so remove a preset from configuration if you want to uninstall it permanently.
 
