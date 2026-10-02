@@ -102,6 +102,17 @@ class PluginTests(unittest.TestCase):
         )
         self.assertIn(("add", "example@fixture"), self.calls)
 
+    def test_hexadecimal_names_are_moving_refs(self):
+        for ref in ("deadbee", "deadbeef", "DEADBEEF", "a" * 39):
+            with self.subTest(ref=ref):
+                entry = dict(repository=URL, ref=ref)
+                plugins.apply([entry], self.home)
+                self.calls.clear()
+                plugins.apply([entry], self.home)
+                self.assertIn(("marketplace", "upgrade", "fixture"), self.calls)
+                self.assertEqual(self.state()["sources"][URL + ".git"]["ref"], ref)
+                self.assertEqual(self.installed, {"example@fixture"})
+
     def test_multiple_plugins_need_explicit_selection(self):
         self.available = ["example", "another"]
         plugins.apply([self.entry()], self.home)
@@ -215,7 +226,7 @@ class PluginTests(unittest.TestCase):
         plugins.apply([self.entry()], self.home)
         for entries in (
             None,
-            [dict(repository=URL, ref="deadbeef")],
+            [dict(repository=URL, ref="invalid..ref")],
             [self.entry(), dict(repository=URL, ref=SHA)],
             [dict(repository="file:///tmp/repo")],
         ):

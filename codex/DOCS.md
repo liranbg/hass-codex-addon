@@ -52,7 +52,7 @@ plugin_presets:
     plugin: home-assistant-skills
 ```
 
-For a development branch, use a value such as `ref: feature/ha`. For a tag, use `ref: v1.0.0`. For a commit pin, copy the full 40-character SHA from GitHub into `ref`; abbreviated hashes are rejected. All plugins from the same marketplace share one reference, so do not configure that repository at multiple refs.
+For a development branch, use a value such as `ref: feature/ha`. For a tag, use `ref: v1.0.0`. For a commit pin, copy the full 40-character SHA from GitHub into `ref`. Shorter hexadecimal values such as `deadbeef` are treated as moving branch or tag names, not commit pins; use the full SHA to pin a commit. All plugins from the same marketplace share one reference, so do not configure that repository at multiple refs.
 
 | Configuration | On each add-on restart |
 | --- | --- |

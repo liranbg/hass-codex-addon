@@ -78,8 +78,6 @@ def presets(entries: list[dict]) -> dict[str, dict]:
             or ref.endswith(("/", ".", ".lock"))
         ):
             raise PresetError("ref must be a branch, tag, or full 40-character SHA")
-        if re.fullmatch(r"[a-fA-F0-9]{7,39}", ref):
-            raise PresetError("commit pins require the full 40-character SHA")
         if re.fullmatch(r"[a-fA-F0-9]{40}", ref):
             ref = ref.lower()
         plugin = entry.get("plugin") or ""

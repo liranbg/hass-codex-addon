@@ -217,3 +217,25 @@ assert sorted(p["pluginId"] for p in native("plugin", "list")["installed"]) == [
     "sample@fixture",
 ]
 print("PASS: re-adding a preset reuses its marketplace with the newly selected ref")
+
+command("git", "-C", str(REPO), "branch", "deadbeef")
+hex_branch = dict(entry, ref="deadbeef")
+start([hex_branch])
+assert "second revision" in skill.read_text()
+(REPO / "plugins/sample/skills/example/SKILL.md").write_text(
+    "---\nname: sample-fixture\ndescription: A native plugin fixture.\n---\nthird revision\n"
+)
+third = commit()
+command("git", "-C", str(REPO), "branch", "-f", "deadbeef", third)
+start([hex_branch])
+assert "third revision" in skill.read_text()
+print("PASS: hexadecimal branch names are accepted and refresh on restart")
+
+command("git", "-C", str(REPO), "tag", "cafe123", first)
+hex_tag = dict(entry, ref="cafe123")
+start([hex_tag])
+assert "first revision" in skill.read_text()
+command("git", "-C", str(REPO), "tag", "-f", "cafe123", third)
+start([hex_tag])
+assert "third revision" in skill.read_text()
+print("PASS: hexadecimal tag names are accepted and refresh when the tag moves")
