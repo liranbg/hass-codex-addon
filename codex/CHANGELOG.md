@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Update Codex CLI from 0.159.2 to 0.160.0.
+
 ## 0.1.1
 
 - Run new and resumed Codex sessions with --no-daemon to avoid background app-server process start-time failures in Home Assistant containers.
