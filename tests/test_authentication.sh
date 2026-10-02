@@ -3,8 +3,9 @@
 set -euo pipefail
 
 IMAGE="${1:-hass-codex-addon:dev}"
-AUTH_DATA=$(mktemp -d)
-trap 'rm -rf "${AUTH_DATA}"' EXIT
+# A Docker volume avoids root-owned bind-mount files on Linux CI runners.
+AUTH_DATA=$(docker volume create)
+trap 'docker volume rm "${AUTH_DATA}" >/dev/null' EXIT
 
 # Run the real startup script, replacing only Supervisor config and ttyd.
 for phase in first second; do

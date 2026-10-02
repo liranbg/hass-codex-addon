@@ -34,7 +34,7 @@ See the [OpenAI sandbox documentation](https://learn.chatgpt.com/docs/sandboxing
 The terminal automatically:
 
 - Reuses your saved Codex login, or logs in using your configured API key if no saved login exists. With neither, Codex prompts you to choose a sign-in method.
-- Creates an `AGENTS.md` file in the working directory if one doesn't exist (provides Home Assistant context to Codex)
+- Refreshes the managed `AGENTS.md` in the working directory from the bundled template, preserving personal instructions separately
 - Starts Codex with the **workspace-write sandbox** and your approval review and internet access settings
 - Restarts the session when Codex exits (type `!exit` to quit)
 
@@ -50,13 +50,19 @@ Here are some things you can ask Codex to do:
 
 ### AGENTS.md Template
 
-On first run, the add-on copies a bundled `AGENTS.tmpl.md` template to `AGENTS.md` in your working directory. This file provides Codex with context about the Home Assistant environment, including:
+Whenever you open the terminal, the add-on refreshes `AGENTS.md` in your working directory from the bundled `AGENTS.tmpl.md`. This file provides Codex with context about the Home Assistant environment, including:
 
 - Key files and folders (`configuration.yaml`, `automations.yaml`, etc.)
 - Common tasks (adding automations, scenes, integrations)
 - Validation commands and safety guidelines
 
-You can customize this file to better suit your setup. It won't be overwritten if it already exists.
+Put your own instructions in **`AGENTS.extend.md`** beside `AGENTS.md` (by default, `/config/AGENTS.extend.md`). This file is optional and is never overwritten by the add-on. The managed template tells Codex to read it before starting work and use it as additional instructions and installation context. Edit the extension instead of `AGENTS.md`, because changes to the managed file are replaced when you reopen the terminal.
+
+On the first upgrade to managed instructions, an existing `AGENTS.md` is saved as `AGENTS.md.backup.XXXXXX`. If no extension exists, its contents are also copied to `AGENTS.extend.md`. Review this migrated extension and remove old bundled defaults, keeping your personal instructions. If an extension already exists, it is preserved; the terminal shows the backup path so you can merge any personal instructions yourself.
+
+To ship new defaults to an existing installation, edit `codex/AGENTS.tmpl.md` and publish an add-on release following `DEVELOPMENT.md`. Install that update in Home Assistant and reopen the terminal to apply the new template. An already-running Codex session must be restarted to load the updated guidance. A restart of the old add-on image cannot pick up repository changes.
+
+Codex's native `AGENTS.override.md` replaces `AGENTS.md` in the same directory. If you use that override, include your own instruction to read the extension. Symlinked or non-file `AGENTS.md` paths are rejected to avoid replacing user-managed links.
 
 ### Session Resume
 

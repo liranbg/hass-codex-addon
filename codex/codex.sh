@@ -22,10 +22,33 @@ case "${CODEX_ALLOW_INTERNET_ACCESS:-true}" in
   *) echo "ERROR: allow_internet_access must be true or false."; exit 1 ;;
 esac
 
-# Ensure AGENTS.md exists in working directory
-if [[ ! -f "AGENTS.md" ]]; then
-  echo "Creating AGENTS.md from template..."
-  cp /AGENTS.tmpl.md AGENTS.md
+clear
+
+# Refresh bundled guidance while preserving pre-existing user instructions.
+agents_marker='<!-- Managed by hass-codex-addon; put personal instructions in AGENTS.extend.md. -->'
+if [[ -L AGENTS.md || ( -e AGENTS.md && ! -f AGENTS.md ) ]]; then
+  echo "ERROR: AGENTS.md must be a regular file. Move personal instructions to AGENTS.extend.md."
+  exit 1
+fi
+if [[ -f AGENTS.md ]] && [[ "$(head -n 1 AGENTS.md)" != "${agents_marker}" ]]; then
+  agents_backup="$(mktemp ./AGENTS.md.backup.XXXXXX)"
+  cp AGENTS.md "${agents_backup}"
+  echo "Saved existing AGENTS.md to ${agents_backup}."
+  if [[ ! -e AGENTS.extend.md && ! -L AGENTS.extend.md ]]; then
+    cp AGENTS.md AGENTS.extend.md
+    echo "Migrated existing instructions to AGENTS.extend.md; review it for outdated defaults."
+  else
+    echo "Keeping existing AGENTS.extend.md. Merge any personal instructions from ${agents_backup} into it."
+  fi
+fi
+if ! cmp -s /AGENTS.tmpl.md AGENTS.md; then
+  agents_tmp="$(mktemp ./AGENTS.md.tmp.XXXXXX)"
+  if ! cp /AGENTS.tmpl.md "${agents_tmp}" || ! mv -f "${agents_tmp}" AGENTS.md; then
+    rm -f "${agents_tmp}"
+    echo "ERROR: Could not refresh AGENTS.md from the bundled template."
+    exit 1
+  fi
+  echo "Updated managed AGENTS.md from bundled template."
 fi
 
 # Pre-flight: verify codex CLI is available
@@ -35,8 +58,6 @@ if ! command -v codex >/dev/null 2>&1; then
   sleep 30
   exit 1
 fi
-
-clear
 
 # Welcome message
 echo "========================================="
