@@ -2,6 +2,7 @@
 
 ## 0.1.3
 
+- Replace the bundled playbook with verified Home Assistant editing, validation, and runtime safety guidelines; inspect installation-specific includes and storage settings.
 - Refresh managed AGENTS.md from bundled defaults when opening the terminal; support optional AGENTS.extend.md and back up existing instructions during migration.
 
 ## 0.1.2
