@@ -29,6 +29,17 @@ class StartupTimeout(PresetError):
     """Stop reconciliation before cached plugins can be removed."""
 
 
+class StartupCancelled(PresetError):
+    """Interrupt native commands and roll back when the add-on is stopped."""
+
+
+def cancel_startup(signum, frame):
+    """Handle shutdown once; allow command cleanup and rollback to finish."""
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    raise StartupCancelled("preset setup cancelled by shutdown")
+
+
 def command(args: list[str], deadline: float | None = None, limit: float = 180):
     """Bound command time and terminate descendants when a download stalls."""
     remaining = limit if deadline is None else min(limit, deadline - time.monotonic())
@@ -46,12 +57,14 @@ def command(args: list[str], deadline: float | None = None, limit: float = 180):
     ) as process:
         try:
             stdout, stderr = process.communicate(timeout=remaining)
-        except subprocess.TimeoutExpired:
+        except (subprocess.TimeoutExpired, StartupCancelled) as error:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
             process.communicate()
+            if isinstance(error, StartupCancelled):
+                raise
             if deadline is not None and remaining < limit:
                 raise StartupTimeout(message) from None
             raise
@@ -77,7 +90,14 @@ def write_atomic(path: Path, content: str) -> None:
 
 def codex(*args: str, deadline: float | None = None) -> dict:
     """Call the native CLI without a shell, login prompts, or credential output."""
-    result = command(["codex", "plugin", *args, "--json"], deadline)
+    # Put JSON before the positional separator so names beginning with '-' work.
+    if args[0] in ("add", "remove"):
+        argv = ["codex", "plugin", args[0], "--json", "--", *args[1:]]
+    elif args[:2] == ("marketplace", "upgrade"):
+        argv = ["codex", "plugin", *args[:2], "--json", "--", *args[2:]]
+    else:
+        argv = ["codex", "plugin", *args, "--json"]
+    result = command(argv, deadline)
     result.check_returncode()
     response = json.loads(result.stdout)
     # Marketplace upgrades report per-source failures with a successful exit.
@@ -115,7 +135,7 @@ def presets(entries: list[dict], deadline: float | None = None) -> dict[str, dic
             ref = ref.lower()
         plugin = entry.get("plugin") or ""
         if not isinstance(plugin, str) or (
-            plugin and not re.fullmatch(r"[\w-]+", plugin)
+            plugin and not re.fullmatch(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*", plugin)
         ):
             raise PresetError(
                 "plugin must be a plugin name, without a marketplace suffix"
@@ -190,7 +210,20 @@ def apply(entries: list[dict], home: Path) -> None:
     if not groups and not state["plugins"]:
         return
     wanted = set()
-    known = native("marketplace", "list")["marketplaces"]
+    lookup_failed = False
+    try:
+        known = native("marketplace", "list")["marketplaces"]
+    except (StartupTimeout, StartupCancelled):
+        raise
+    except (PresetError, OSError, ValueError, subprocess.SubprocessError):
+        # Native discovery validates every configured marketplace. One broken
+        # unrelated manifest must not prevent scoped add/list operations.
+        known = []
+        lookup_failed = True
+        print(
+            "WARNING: Could not list all marketplaces; trying each preset independently.",
+            flush=True,
+        )
     marketplace_roots = {entry["name"]: Path(entry["root"]) for entry in known}
     marketplace_sources = {
         info["source"].rstrip("/").removesuffix(".git") + ".git": entry["name"]
@@ -216,27 +249,35 @@ def apply(entries: list[dict], home: Path) -> None:
             if info["source"] == source
         }
         try:
+            refresh = True
             if name not in marketplace_roots or not marketplace_roots[name].exists():
-                added = native("marketplace", "add", source, "--ref", ref)
+                add_ref = saved.get("ref", ref) if lookup_failed else ref
+                added = native("marketplace", "add", source, "--ref", add_ref)
                 name = added["marketplaceName"]
-                saved = {"marketplace": name, "ref": ref}
+                saved = {"marketplace": name, "ref": add_ref}
                 state["sources"][source] = saved
                 save()
-            else:
+                refresh = added.get("alreadyAdded", False) or add_ref != ref
+            if refresh:
                 config = home / "config.toml"
-                previous = set_ref(config, name, ref)
-                if saved.get("ref") != ref or config.read_text() != previous:
-                    try:
+                previous = config.read_text()
+                try:
+                    set_ref(config, name, ref)
+                    changed_ref = (
+                        saved.get("ref") != ref or config.read_text() != previous
+                    )
+                    if changed_ref:
                         native("marketplace", "upgrade", name)
-                    except Exception:
-                        write_atomic(config, previous)
-                        raise
+                except Exception:
+                    write_atomic(config, previous)
+                    raise
+                if changed_ref:
                     state["sources"][source] = {"marketplace": name, "ref": ref}
                     save()
                 elif not re.fullmatch(r"[a-f0-9]{40}", ref):
                     try:
                         native("marketplace", "upgrade", name)
-                    except StartupTimeout:
+                    except (StartupTimeout, StartupCancelled):
                         raise
                     except (
                         PresetError,
@@ -249,25 +290,26 @@ def apply(entries: list[dict], home: Path) -> None:
                             flush=True,
                         )
 
-            listing = native("list", "--marketplace", name, "--available")
-            available = {
-                plugin["name"]: plugin["pluginId"] for plugin in listing["available"]
+            listing = native("list", f"--marketplace={name}", "--available")
+            catalog = {
+                plugin["name"]: plugin["pluginId"]
+                for plugin in [*listing["installed"], *listing["available"]]
             }
             installed = {plugin["pluginId"] for plugin in listing["installed"]}
             selected = group["plugins"]
             if "" in selected:
-                if len(available) != 1:
-                    choices = ", ".join(sorted(available)) or "none"
+                if len(catalog) != 1:
+                    choices = ", ".join(sorted(catalog)) or "none"
                     raise PresetError(
                         f"set plugin for marketplace {name}; available plugins: {choices}"
                     )
-                selected = (selected - {""}) | set(available)
+                selected = (selected - {""}) | set(catalog)
             for plugin in sorted(selected):
-                if plugin not in available:
+                if plugin not in catalog:
                     raise PresetError(
                         f"plugin {plugin} is not available in marketplace {name}"
                     )
-                plugin_id = available[plugin]
+                plugin_id = catalog[plugin]
                 wanted.add(plugin_id)
                 # Native add also refreshes installed bundles when their files
                 # changed without a version bump, and registers bundled MCP.
@@ -277,7 +319,7 @@ def apply(entries: list[dict], home: Path) -> None:
                 )
                 save()
                 print(f"Plugin preset ready: {plugin_id} ({ref}).", flush=True)
-        except StartupTimeout:
+        except (StartupTimeout, StartupCancelled):
             raise
         except (PresetError, OSError, ValueError, subprocess.SubprocessError) as error:
             wanted.update(retained)
@@ -295,7 +337,7 @@ def apply(entries: list[dict], home: Path) -> None:
         if info["owned"]:
             try:
                 native("remove", plugin_id)
-            except StartupTimeout:
+            except (StartupTimeout, StartupCancelled):
                 raise
             except (PresetError, OSError, ValueError, subprocess.SubprocessError):
                 print(
@@ -312,6 +354,8 @@ def apply(entries: list[dict], home: Path) -> None:
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, cancel_startup)
+    signal.signal(signal.SIGINT, cancel_startup)
     try:
         options = Path(sys.argv[1])
         entries = (
@@ -320,6 +364,8 @@ if __name__ == "__main__":
             else []
         )
         apply(entries, Path(os.environ["CODEX_HOME"]))
+    except StartupCancelled:
+        print("Plugin preset setup stopped.", flush=True)
     except (PresetError, OSError, ValueError, subprocess.SubprocessError) as error:
         detail = str(error) if isinstance(error, PresetError) else type(error).__name__
         print(

@@ -64,10 +64,15 @@ class PluginTests(unittest.TestCase):
             return {"errors": []}
         if args[:1] == ("list",):
             return {
-                "installed": [{"pluginId": name} for name in self.installed],
+                "installed": [
+                    {"name": name.rsplit("@", 1)[0], "pluginId": name}
+                    for name in self.installed
+                    if name.endswith("@fixture")
+                ],
                 "available": [
                     {"name": name, "pluginId": name + "@fixture"}
                     for name in self.available
+                    if name + "@fixture" not in self.installed
                 ],
             }
         if args[:1] == ("add",):
@@ -148,6 +153,67 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(
             sum(call[:2] == ("marketplace", "add") for call in self.calls), 1
         )
+
+    def test_plugin_names_match_native_ascii_dotted_grammar(self):
+        self.available = ["acme.tools", "-tools.v2"]
+        for name in self.available:
+            with self.subTest(name=name):
+                plugins.apply([self.entry(plugin=name)], self.home)
+                self.assertIn(name + "@fixture", self.installed)
+        for name in (
+            "café",
+            ".tools",
+            "tools.",
+            "acme..tools",
+            "../tools",
+            "x@fixture",
+        ):
+            with self.subTest(name=name), self.assertRaises(plugins.PresetError):
+                plugins.presets([self.entry(plugin=name)])
+
+    def test_removing_one_preset_after_all_marketplace_plugins_are_installed(self):
+        self.available = ["example", "another"]
+        plugins.apply(
+            [self.entry(plugin="example"), self.entry(plugin="another")], self.home
+        )
+        plugins.apply([self.entry(plugin="example")], self.home)
+        self.assertEqual(self.installed, {"example@fixture"})
+
+    def test_shutdown_restores_a_pending_ref_and_preserves_ownership(self):
+        plugins.apply([self.entry()], self.home)
+        before = self.config.read_text()
+        ownership = (self.home / "addon-plugin-presets.json").read_text()
+
+        def cancelled(*args, **kwargs):
+            if args[:2] == ("marketplace", "upgrade"):
+                raise plugins.StartupCancelled("shutdown")
+            return self.native(*args)
+
+        with (
+            patch.object(plugins, "codex", side_effect=cancelled),
+            self.assertRaises(plugins.StartupCancelled),
+        ):
+            plugins.apply([dict(repository=URL, ref=SHA)], self.home)
+        self.assertEqual(self.config.read_text(), before)
+        self.assertEqual(
+            (self.home / "addon-plugin-presets.json").read_text(), ownership
+        )
+
+    def test_global_discovery_failure_uses_scoped_preset_operations(self):
+        plugins.apply([self.entry()], self.home)
+        self.available = ["example", "another"]
+
+        def broken_discovery(*args, **kwargs):
+            if args == ("marketplace", "list"):
+                raise plugins.PresetError("unrelated marketplace is broken")
+            return self.native(*args)
+
+        with patch.object(plugins, "codex", side_effect=broken_discovery):
+            plugins.apply(
+                [self.entry(plugin="example"), self.entry(plugin="another")], self.home
+            )
+        self.assertEqual(self.installed, {"example@fixture", "another@fixture"})
+        self.assertTrue(self.state()["plugins"]["another@fixture"]["owned"])
 
     def test_removal_only_uninstalls_owned_plugins(self):
         self.installed.add("personal@other")

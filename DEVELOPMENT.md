@@ -171,6 +171,8 @@ Native `marketplace add --ref` selects the initial reference. Git's `check-ref-f
 
 `apply()` starts a shared 30-second deadline before validation. Every child command receives only the remaining budget, and Git prompts are disabled. Commands run in their own process groups; a timeout kills the group, including Codex and Git descendants, before configuration rollback. `StartupTimeout` stops reconciliation before removal of any unvisited presets, and the entrypoint logs a warning while continuing to ttyd. Successful installs have already saved their ownership state, so a timeout can be retried safely on the next start.
 
+`run.sh` runs the preset manager as a tracked child and waits for it before starting ttyd. SIGTERM/SIGINT interrupts that wait immediately, signals the child, waits for cleanup, and exits without opening the terminal. The manager terminates its active command group and rolls back a pending reference change when cancelled. Native global marketplace discovery can fail because of an unrelated broken manifest; the adapter then attempts each repository through scoped native add/list operations. Plugin selection matches Codex's ASCII, dot-separated name grammar, including names beginning with a hyphen.
+
 The container stores Codex state under `/data/.codex`, and the interactive wrapper selects file storage for MCP OAuth credentials. Plugin MCP definitions still need any server-specific authentication or runtime dependencies. The add-on does not supply them.
 
 Run unit checks and native lifecycle tests after building the image:
@@ -182,7 +184,7 @@ ruff check codex/manage-plugins.py tests/test_plugins.py tests/plugin_container.
 bash tests/test_plugin_presets.sh hass-codex-addon:dev
 ```
 
-The container test uses local Git fixtures through the real Codex CLI and actual startup script. It verifies plugin and MCP registration, skill discovery, branch updates without version bumps, commit pins, failed-reference rollback, and removal without losing manual plugins or MCP settings. It also exercises hexadecimal and punctuation ref names, then stalls a Git operation to verify the shared startup deadline opens the terminal and preserves cached state. It makes no OpenAI requests or external downloads.
+The container test uses local Git fixtures through the real Codex CLI and actual startup script. It verifies plugin and MCP registration, skill discovery, branch updates without version bumps, commit pins, failed-reference rollback, and removal without losing manual plugins or MCP settings. It also exercises hexadecimal and punctuation ref names, dotted and leading-hyphen plugin names, isolation of a broken unrelated marketplace, the shared startup deadline, and SIGTERM/SIGINT during a stalled Git operation. It makes no OpenAI requests or external downloads.
 
 ## Architecture overview
 

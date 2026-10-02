@@ -4,10 +4,15 @@
 set -euo pipefail
 
 # Graceful shutdown
+CHILD_PID=""
 cleanup() {
-  bashio::log.info "Shutting down ttyd..."
-  kill -TERM "$TTYD_PID" 2>/dev/null || true
-  wait "$TTYD_PID" 2>/dev/null || true
+  trap '' SIGTERM SIGINT
+  bashio::log.info "Shutting down Codex add-on..."
+  if [[ -n "${CHILD_PID}" ]]; then
+    kill -TERM "${CHILD_PID}" 2>/dev/null || true
+    wait "${CHILD_PID}" 2>/dev/null || true
+  fi
+  exit 0
 }
 trap cleanup SIGTERM SIGINT
 
@@ -69,7 +74,10 @@ export CODEX_REVIEW_APPROVALS="${CODEX_REVIEW_APPROVALS:-approve}"
 export CODEX_ALLOW_INTERNET_ACCESS="${CODEX_ALLOW_INTERNET_ACCESS:-true}"
 
 # Apply preset preferences once per start; Codex manages plugin installation.
-python3 /manage-plugins.py /data/options.json
+python3 /manage-plugins.py /data/options.json &
+CHILD_PID=$!
+wait "${CHILD_PID}"
+CHILD_PID=""
 
 ttyd \
   --interface 0.0.0.0 \
@@ -79,5 +87,5 @@ ttyd \
   -t "titleFixed=${TTYD_TITLE}" \
   -t "fontSize=${TTYD_FONT_SIZE}" \
   env bash -c "/codex.sh" &
-TTYD_PID=$!
-wait "$TTYD_PID"
+CHILD_PID=$!
+wait "${CHILD_PID}"

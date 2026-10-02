@@ -2,6 +2,7 @@
 
 import json
 import os
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -66,31 +67,32 @@ Path("/data").mkdir(exist_ok=True)
             name="fixture",
             plugins=[
                 dict(name=name, source=dict(source="local", path=f"./plugins/{name}"))
-                for name in ("sample", "manual")
+                for name in ("sample", "manual", "acme.tools", "-extra")
             ],
         )
     )
 )
-for name in ("sample", "manual"):
+for name in ("sample", "manual", "acme.tools", "-extra"):
     folder = REPO / "plugins" / name
     (folder / ".codex-plugin").mkdir(parents=True)
     (folder / "skills/example").mkdir(parents=True)
-    (folder / ".codex-plugin/plugin.json").write_text(
-        json.dumps(
-            dict(
-                name=name, version="1.0.0", skills="./skills/", mcpServers="./.mcp.json"
+    manifest = dict(name=name, version="1.0.0", skills="./skills/")
+    if name in ("sample", "manual"):
+        manifest["mcpServers"] = "./.mcp.json"
+    (folder / ".codex-plugin/plugin.json").write_text(json.dumps(manifest))
+    if name in ("sample", "manual"):
+        (folder / ".mcp.json").write_text(
+            json.dumps(
+                dict(
+                    mcpServers={
+                        name: dict(type="http", url="https://example.invalid/mcp")
+                    }
+                )
             )
         )
-    )
-    (folder / ".mcp.json").write_text(
-        json.dumps(
-            dict(
-                mcpServers={name: dict(type="http", url="https://example.invalid/mcp")}
-            )
-        )
-    )
+    skill_name = name.replace(".", "-").lstrip("-") + "-fixture"
     (folder / "skills/example/SKILL.md").write_text(
-        f"---\nname: {name}-fixture\ndescription: A native plugin fixture.\n---\nfirst revision\n"
+        f"---\nname: {skill_name}\ndescription: A native plugin fixture.\n---\nfirst revision\n"
     )
 command("git", "-C", str(REPO), "init", "-b", "main")
 first = commit()
@@ -219,6 +221,40 @@ assert sorted(p["pluginId"] for p in native("plugin", "list")["installed"]) == [
 ]
 print("PASS: re-adding a preset reuses its marketplace with the newly selected ref")
 
+output = start([entry, dict(entry, plugin="acme.tools"), dict(entry, plugin="-extra")])
+installed = native("plugin", "list")["installed"]
+assert sorted(p["pluginId"] for p in installed) == [
+    "-extra@fixture",
+    "acme.tools@fixture",
+    "manual@fixture",
+    "sample@fixture",
+], (output, installed)
+output = start([entry])
+installed = native("plugin", "list")["installed"]
+assert sorted(p["pluginId"] for p in installed) == [
+    "manual@fixture",
+    "sample@fixture",
+], (output, installed)
+print("PASS: dotted and leading-hyphen plugin names install and uninstall correctly")
+
+broken_root = Path("/broken-marketplace")
+(broken_root / ".agents/plugins").mkdir(parents=True)
+broken_manifest = broken_root / ".agents/plugins/marketplace.json"
+broken_manifest.write_text(json.dumps(dict(name="broken", plugins=[])))
+native("plugin", "marketplace", "add", str(broken_root))
+broken_manifest.unlink()
+output = start([entry, dict(entry, plugin="acme.tools")])
+assert "trying each preset independently" in output, output
+assert (HOME / "addon-plugin-presets.json").read_text().count("acme.tools@fixture") == 1
+native("plugin", "marketplace", "remove", "broken")
+assert any(
+    p["pluginId"] == "acme.tools@fixture" for p in native("plugin", "list")["installed"]
+)
+start([entry])
+print(
+    "PASS: a broken unrelated marketplace does not prevent scoped preset installation"
+)
+
 command("git", "-C", str(REPO), "branch", "deadbeef")
 hex_branch = dict(entry, ref="deadbeef")
 start([hex_branch])
@@ -257,7 +293,7 @@ git_wrapper = bin_dir / "git"
 git_wrapper.write_text(
     git_wrapper.read_text().replace(
         'exec /usr/bin/git "${args[@]}"',
-        'if [[ "$*" == *ls-remote* ]]; then sleep 120; fi\nexec /usr/bin/git "${args[@]}"',
+        'if [[ "$*" == *ls-remote* ]]; then echo $$ > /data/stalled-git.pid; sleep 120; fi\nexec /usr/bin/git "${args[@]}"',
     )
 )
 before = (HOME / "config.toml").read_text()
@@ -274,3 +310,51 @@ assert (HOME / "addon-plugin-presets.json").read_text() == ownership
 assert "third revision" in skill.read_text()
 assert Path("/data/git-calls.log").read_text().count("ls-remote") == 1
 print("PASS: a shared startup deadline opens the terminal and preserves cached plugins")
+
+for stop_signal in (signal.SIGTERM, signal.SIGINT):
+    stalled_pid = Path("/data/stalled-git.pid")
+    stalled_pid.unlink(missing_ok=True)
+    options = json.loads(Path("/data/options.json").read_text())
+    options["plugin_presets"] = [entry]
+    Path("/data/options.json").write_text(json.dumps(options))
+    startup = subprocess.Popen(
+        [
+            "bash",
+            "-ec",
+            "source /usr/lib/bashio/bashio.sh; bashio::addon.config() { cat /data/options.json; }; source /run.sh",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        ready_deadline = time.monotonic() + 10
+        while not stalled_pid.exists():
+            assert startup.poll() is None, (
+                "startup ended before the stalled Git command"
+            )
+            assert time.monotonic() < ready_deadline, "Git command did not start"
+            time.sleep(0.05)
+        group = os.getpgid(int(stalled_pid.read_text()))
+        stopped = time.monotonic()
+        startup.send_signal(stop_signal)
+        stdout, stderr = startup.communicate(timeout=5)
+        assert startup.returncode == 0, stderr
+        assert time.monotonic() - stopped < 5
+        assert "TERMINAL_READY" not in stdout
+        assert "unbound variable" not in stderr
+        assert (HOME / "config.toml").read_text() == before
+        assert (HOME / "addon-plugin-presets.json").read_text() == ownership
+        for stat in Path("/proc").glob("[0-9]*/stat"):
+            try:
+                fields = stat.read_text().rsplit(") ", 1)[1].split()
+            except FileNotFoundError:
+                continue
+            assert fields[0] == "Z" or int(fields[2]) != group, stat
+    finally:
+        if startup.poll() is None:
+            startup.kill()
+            startup.communicate()
+print(
+    "PASS: SIGTERM and SIGINT cancel setup promptly, stop descendants, and restore config"
+)
