@@ -20,6 +20,11 @@ class PermissionsTests(unittest.TestCase):
         self.bin = self.work / "bin"
         self.bin.mkdir()
         (self.work / "AGENTS.md").touch()
+        self.template = self.work / "AGENTS.tmpl.md"
+        self.template.write_text((ROOT / "codex/AGENTS.tmpl.md").read_text())
+        self.wrapper = self.work / "codex.sh"
+        self.wrapper.write_text((ROOT / "codex/codex.sh").read_text().replace(
+            "/AGENTS.tmpl.md", str(self.template)))
         self.env = dict(os.environ)
         for key in list(self.env):
             if key.startswith("CODEX_") or key == "OPENAI_API_KEY":
@@ -38,7 +43,7 @@ class PermissionsTests(unittest.TestCase):
 
     def launch(self, **settings):
         return subprocess.run(
-            ["bash", str(ROOT / "codex/codex.sh")], input="!exit\n",
+            ["bash", str(self.wrapper)], input="!exit\n",
             text=True, capture_output=True, env=dict(self.env, **settings),
             timeout=10,
         )
@@ -83,6 +88,66 @@ class PermissionsTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("ERROR:", result.stdout)
                 self.assertNotIn("ARGS:", result.stdout)
+
+    def test_fresh_install_leaves_extension_optional(self):
+        (self.work / "AGENTS.md").unlink()
+        result = self.launch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.work / "AGENTS.md").read_text(),
+                         self.template.read_text())
+        self.assertFalse((self.work / "AGENTS.extend.md").exists())
+        self.assertEqual(list(self.work.glob("AGENTS.md.backup.*")), [])
+
+    def test_legacy_instructions_are_backed_up_and_migrated_once(self):
+        legacy = "# My installation\nUse kitchen_light for the kitchen.\n"
+        (self.work / "AGENTS.md").write_text(legacy)
+        for _ in range(2):
+            result = self.launch()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        backups = list(self.work.glob("AGENTS.md.backup.*"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), legacy)
+        self.assertEqual((self.work / "AGENTS.extend.md").read_text(), legacy)
+        self.assertEqual((self.work / "AGENTS.md").read_text(),
+                         self.template.read_text())
+
+    def test_migration_preserves_existing_extension(self):
+        (self.work / "AGENTS.md").write_text("Legacy instructions\n")
+        extension = self.work / "AGENTS.extend.md"
+        extension.write_text("My current instructions\n")
+        result = self.launch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(extension.read_text(), "My current instructions\n")
+        backup, = self.work.glob("AGENTS.md.backup.*")
+        self.assertEqual(backup.read_text(), "Legacy instructions\n")
+        self.assertIn("Merge any personal instructions", result.stdout)
+
+    def test_template_update_preserves_extension_and_avoids_rewriting(self):
+        (self.work / "AGENTS.md").write_text(self.template.read_text())
+        extension = self.work / "AGENTS.extend.md"
+        extension.write_text("User preferences\n")
+        self.template.write_text(self.template.read_text() + "\nUpdated defaults\n")
+        result = self.launch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        managed = self.work / "AGENTS.md"
+        self.assertEqual(managed.read_text(), self.template.read_text())
+        before = managed.stat().st_mtime_ns
+        self.assertEqual(self.launch().returncode, 0)
+        self.assertEqual(managed.stat().st_mtime_ns, before)
+        self.assertEqual(extension.read_text(), "User preferences\n")
+        self.assertEqual(list(self.work.glob("AGENTS.md.backup.*")), [])
+
+    def test_symlinked_agents_file_is_not_replaced(self):
+        target = self.work / "personal.md"
+        target.write_text("Personal instructions\n")
+        managed = self.work / "AGENTS.md"
+        managed.unlink()
+        managed.symlink_to(target)
+        result = self.launch()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(managed.is_symlink())
+        self.assertEqual(target.read_text(), "Personal instructions\n")
+        self.assertNotIn("ARGS:", result.stdout)
 
     def test_supervisor_options_are_exported_to_terminal(self):
         source = (ROOT / "codex/run.sh").read_text()
