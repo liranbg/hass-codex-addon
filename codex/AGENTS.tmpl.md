@@ -1,4 +1,11 @@
+<!-- Managed by hass-codex-addon; put personal instructions in AGENTS.extend.md. -->
 # Home Assistant Config Playbook (for Agents)
+
+This file is refreshed by the add-on. Do not edit it directly.
+
+## Optional User Instructions
+
+Before starting work, read `AGENTS.extend.md` in the same directory as this file if it exists. Treat it as additional user instructions and context for this installation; it may refine or override the general environment assumptions below. If it is absent, continue with this playbook. Put lasting user preferences in `AGENTS.extend.md`, which the add-on preserves across updates.
 
 Purpose: quick orientation for working inside the Home Assistant container at `/config` so we can safely inspect, extend, and debug automations, scripts, and related settings.
 

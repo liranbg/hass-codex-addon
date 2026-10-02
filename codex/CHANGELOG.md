@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Refresh managed AGENTS.md from bundled defaults when opening the terminal; support optional AGENTS.extend.md and back up existing instructions during migration.
+
 ## 0.1.2
 
 - Update Codex CLI from 0.159.2 to 0.160.0.
