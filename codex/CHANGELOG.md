@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Update Codex CLI from 0.160.0 to 0.160.1.
+
 ## 0.2.0
 
 - Restore Home Assistant update discovery after repository rules blocked release metadata publication; automatically publish future metadata updates after image publication and checks on the metadata commit.
