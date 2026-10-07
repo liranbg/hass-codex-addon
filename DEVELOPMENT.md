@@ -279,16 +279,18 @@ For each release:
 3. The workflow publishes `ghcr.io/liranbg/hass-codex-addon/{arch}:VERSION`
    for amd64 and aarch64, with Home Assistant image labels.
 4. It creates the `vVERSION` GitHub release and stages a metadata commit on a
-   temporary `auto/publish-RUN_ID-RUN_ATTEMPT` branch. It explicitly dispatches
-   CI on that branch and waits for that exact commit's checks to pass. Then it
+   temporary `auto/publish-RUN_ID-RUN_ATTEMPT` branch using `CODEX_UPDATE_TOKEN`.
+   The push triggers CI; the workflow waits for that exact commit's push checks
+   to pass. Manual `workflow_dispatch` checks do not satisfy branch rulesets. Then it
    fast-forwards `main` to the checked commit and deletes the temporary branch.
    Home Assistant sees the update only after both images and all checks succeed.
    No publication PR, additional merge, or protection bypass is needed.
-   The push uses `GITHUB_TOKEN`, so it does not trigger another release run.
+   The metadata push also uses `CODEX_UPDATE_TOKEN`, so it triggers a follow-up
+   Release run that finds no pending release and skips publication.
 
 The daily Codex updater prepares the Dockerfile pin, a patch bump, and changelog
-in one PR. You decide when to merge it. It also explicitly dispatches CI for
-the bot-created branch. While a release is pending, it defers further updates
+in one PR. You decide when to merge it. Its token-authenticated PR triggers CI
+for the bot-created branch. While a release is pending, it defers further updates
 so another Codex version cannot overwrite the pending release.
 
 For add-on changes unrelated to Codex, choose a patch, minor, or major bump in
@@ -297,11 +299,13 @@ bump keep publishing the development image but do not create a stable release.
 
 ### Repository setup and recovery
 
-- Release automation uses `GITHUB_TOKEN` with contents, packages, and actions
-  permissions to publish images, stage metadata, and dispatch CI. `main` must
-  allow fast-forward pushes with passing required status checks; a rule requiring
-  all changes through PRs would prevent this process. No bypass or extra secret
-  is needed. The daily updater separately uses `CODEX_UPDATE_TOKEN` for its PRs.
+- Release automation uses `GITHUB_TOKEN` for images and GitHub releases, and
+  the existing `CODEX_UPDATE_TOKEN` (repository contents read/write) for metadata
+  branch pushes. This token must remain available: `GITHUB_TOKEN` pushes suppress
+  push-triggered CI, and manually dispatched checks cannot satisfy rulesets.
+  `main` must allow fast-forward pushes with passing required status checks;
+  a rule requiring all changes through PRs would prevent this process. No
+  protection bypass is needed. The daily updater shares `CODEX_UPDATE_TOKEN`.
 - Both GHCR architecture packages must be **public** so Home Assistant can
   pull them without GitHub credentials. Check their package visibility before
   the first installation/update using pre-built images.

@@ -5,7 +5,7 @@ description: "OpenAI Codex CLI interface"
 url: "https://github.com/liranbg/hass-codex-addon"
 # Release automation sets this and image after publishing images and checking the metadata commit.
 # The intended next release is recorded in VERSION.
-version: "0.2.0"
+version: "0.2.1"
 image: "ghcr.io/liranbg/hass-codex-addon/{arch}"
 startup: services
 init: false
