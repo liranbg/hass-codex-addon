@@ -111,10 +111,13 @@ jobs:
     needs: [prepare, build-and-push]
     permissions:
       contents: write
-      actions: write
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          # GITHUB_TOKEN pushes cannot start the push-triggered required checks.
+          token: ${{ secrets.CODEX_UPDATE_TOKEN }}
 
       - name: Check main has not changed during publication
         run: |
@@ -158,11 +161,11 @@ jobs:
           BRANCH: ${{ steps.publication.outputs.branch }}
           PUBLICATION_SHA: ${{ steps.publication.outputs.sha }}
         run: |
-          # Explicit dispatch starts CI even though GITHUB_TOKEN pushed the branch.
-          gh workflow run ci.yaml --ref "$BRANCH"
+          # Only push/PR checks satisfy branch rulesets; workflow_dispatch does not.
+          # The staging push uses CODEX_UPDATE_TOKEN to start this eligible run.
           run_id=""
           for _attempt in $(seq 1 60); do
-            run_id=$(gh run list --workflow ci.yaml --event workflow_dispatch \
+            run_id=$(gh run list --workflow ci.yaml --event push \
               --branch "$BRANCH" --limit 20 --json databaseId,headSha \
               --jq ".[] | select(.headSha == \"$PUBLICATION_SHA\") | .databaseId" | head -n 1)
             if [ -n "$run_id" ]; then
@@ -171,7 +174,7 @@ jobs:
             sleep 5
           done
           if [ -z "$run_id" ]; then
-            echo "CI dispatch did not produce a run for $PUBLICATION_SHA."
+            echo "Staging push did not produce a CI run for $PUBLICATION_SHA."
             exit 1
           fi
           gh run watch "$run_id" --interval 10 --exit-status

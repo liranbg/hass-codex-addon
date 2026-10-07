@@ -96,6 +96,15 @@ class PublicationTests(unittest.TestCase):
 
 
 class PublicationCITests(unittest.TestCase):
+    def test_publication_push_starts_ruleset_eligible_ci(self):
+        ci = WORKFLOW.with_name("ci.yaml").read_text()
+        self.assertIn('  push:\n    branches: ["auto/publish-*"]', ci)
+        announce = WORKFLOW.read_text().split("  announce:\n", 1)[1]
+        self.assertIn("token: ${{ secrets.CODEX_UPDATE_TOKEN }}", announce)
+        script = step_script("Run CI on the exact publication commit")
+        self.assertIn("--event push", script)
+        self.assertNotIn("gh workflow run", script)
+
     def test_failed_or_missing_ci_cannot_reach_publication(self):
         script = step_script("Run CI on the exact publication commit")
         with tempfile.TemporaryDirectory() as temp:
@@ -105,8 +114,7 @@ class PublicationCITests(unittest.TestCase):
                 "#!/bin/sh\n"
                 "printf '%s\\n' \"$*\" >> \"$TRACE\"\n"
                 'case "$1 $2" in\n'
-                '  "workflow run") exit "$DISPATCH_STATUS" ;;\n'
-                '  "run list") printf "%s" "$RUN_ID" ;;\n'
+                '  "run list") printf "%s" "$RUN_ID"; exit "$LIST_STATUS" ;;\n'
                 '  "run watch") exit "$CI_STATUS" ;;\n'
                 "  *) exit 99 ;;\n"
                 "esac\n"
@@ -115,21 +123,21 @@ class PublicationCITests(unittest.TestCase):
             sleep = root / "sleep"
             sleep.write_text("#!/bin/sh\nexit 0\n")
             sleep.chmod(0o755)
-            for dispatch, run_id, ci_status, expected in (
+            for listing, run_id, ci_status, expected in (
                 (0, "123", 0, 0),
                 (0, "123", 1, 1),
                 (0, "", 0, 1),
                 (1, "123", 0, 1),
             ):
-                with self.subTest(dispatch=dispatch, run_id=run_id, ci=ci_status):
-                    trace = root / f"trace-{dispatch}-{run_id}-{ci_status}"
+                with self.subTest(listing=listing, run_id=run_id, ci=ci_status):
+                    trace = root / f"trace-{listing}-{run_id}-{ci_status}"
                     env = dict(
                         os.environ,
                         PATH=f"{root}{os.pathsep}{os.environ['PATH']}",
                         BRANCH="auto/publish-test",
                         PUBLICATION_SHA="a" * 40,
                         TRACE=str(trace),
-                        DISPATCH_STATUS=str(dispatch),
+                        LIST_STATUS=str(listing),
                         RUN_ID=run_id,
                         CI_STATUS=str(ci_status),
                     )
@@ -141,8 +149,10 @@ class PublicationCITests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, expected, result.stderr)
                     calls = trace.read_text()
-                    self.assertIn("workflow run ci.yaml --ref auto/publish-test", calls)
-                    if dispatch == 0 and run_id:
+                    self.assertNotIn("workflow run", calls)
+                    self.assertIn("run list --workflow ci.yaml --event push", calls)
+                    self.assertIn("--branch auto/publish-test", calls)
+                    if listing == 0 and run_id:
                         self.assertIn("run watch 123 --interval 10 --exit-status", calls)
                         self.assertIn("a" * 40, calls)
                     else:
