@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Update Codex CLI from 0.160.1 to 0.161.0.
+
 ## 0.2.1
 
 - Update Codex CLI from 0.160.0 to 0.160.1.
