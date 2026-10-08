@@ -41,10 +41,21 @@ fi
 mkdir -p /data/.codex-sessions
 ln -sfn /data/.codex-sessions "${CODEX_HOME}/sessions"
 
-# Read configuration from Home Assistant Supervisor
-OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
-CODEX_MODEL="$(bashio::config 'model')"
-FONT_SIZE="$(bashio::config 'font_size')"
+# Read configuration from the Supervisor options file when available. This keeps
+# startup deterministic in container tests and avoids unnecessary Supervisor API
+# calls before the terminal starts.
+addon_config() {
+  local key="$1"
+  if [[ -f /data/options.json ]]; then
+    jq -r --arg key "${key}" '.[$key] // empty' /data/options.json
+  else
+    bashio::config "${key}"
+  fi
+}
+
+OPENAI_API_KEY="$(addon_config 'openai_api_key')"
+CODEX_MODEL="$(addon_config 'model')"
+FONT_SIZE="$(addon_config 'font_size')"
 
 if [[ -z "${OPENAI_API_KEY}" ]]; then
   bashio::log.info "No API key configured; Codex will reuse its saved login or prompt you to sign in."
@@ -61,10 +72,10 @@ export TTYD_TITLE=${title}
 export TTYD_FONT_SIZE=${FONT_SIZE:-18}
 
 # OpenAI API key environment variable
-CODEX_RESUME_LAST="$(bashio::config 'resume_last_session')"
-CODEX_WORKING_DIR="$(bashio::config 'working_directory')"
-CODEX_REVIEW_APPROVALS="$(bashio::config 'review_approvals')"
-CODEX_ALLOW_INTERNET_ACCESS="$(bashio::config 'allow_internet_access')"
+CODEX_RESUME_LAST="$(addon_config 'resume_last_session')"
+CODEX_WORKING_DIR="$(addon_config 'working_directory')"
+CODEX_REVIEW_APPROVALS="$(addon_config 'review_approvals')"
+CODEX_ALLOW_INTERNET_ACCESS="$(addon_config 'allow_internet_access')"
 
 export OPENAI_API_KEY
 export CODEX_MODEL
