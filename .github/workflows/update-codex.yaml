@@ -45,7 +45,7 @@ jobs:
       - name: Create Pull Request
         if: steps.update.outputs.changed == 'true'
         id: pr
-        uses: peter-evans/create-pull-request@15733dbdfeedb4f7fdb73d13c6f5ac83b710fab8 # v8
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8
         with:
           commit-message: "deps: bump @openai/codex to ${{ steps.versions.outputs.latest }}"
           branch: auto/update-codex
